@@ -1,0 +1,116 @@
+# Padding experiment: does adding functionally-inert code to major_gc.c,
+# at the same location as auto-compact-5.5's real patch, reproduce a
+# similar pplacer_testsuite regression purely from code-layout/cache-
+# alignment shift?
+#
+# ocaml-5.5-padded-fp: stock 5.5.0 (ocaml-git tag) + a dummy, never-called,
+# __attribute__((used)) function inserted at the exact same location as
+# auto-compact-5.5's should_compact_from_stw_single (branch
+# padding-test-5.5, pushed to curche/ocaml.git). This placement did NOT
+# actually shift do_some_marking/mark's addresses at all (verified via nm)
+# — GCC preserved their position since the padding was inserted *after*
+# them in source order.
+#
+# ocaml-5.5-padded-v2-fp: same idea, but placed immediately *before*
+# do_some_marking's definition, with the counter marked `volatile` so GCC
+# can't constant-fold the branches away (v1 used a plain static counter
+# provably always 0, so most of the function body was optimized out,
+# making its real compiled size much smaller than intended). This version
+# verified via nm to shift do_some_marking by ~416 bytes (cache-line offset
+# 48->16), comparable in magnitude to the real patch's 592-byte shift
+# (offset 32->48). Branch: padding-test-5.5-v2.
+#
+# socaml-fp / socaml-auto-compact-fp included as reference points too — all
+# three real patches show a modest-to-real unconfounded regression vs
+# stock-fp (same collection counts, so not a flambda-allocation-pattern
+# artifact like the rest of the flambda/fp matrix):
+#   ocaml-auto-compact-fp    27.36-27.51s  (+6.3 to +7.0%)
+#   socaml-fp                26.29s        (+2.2%)
+#   socaml-auto-compact-fp   25.21s        (-2.0%, actually faster)
+#
+# stock reference: ocaml-5.5-fp  25.73s
+#
+# padding-on-patch: does adding MORE inert padding on top of the real
+# auto-compact-5.5 patch shift do_some_marking further, and does that
+# further shift compound, cancel, or not matter?
+#   ocaml-auto-compact-plus-padding-v1-fp: v1-style padding (after
+#     should_compact_from_stw_single) applied on top of the patch. Verified
+#     via nm: does NOT shift do_some_marking/mark at all (identical to plain
+#     auto-compact-5.5) — same as v1 did on stock. Branch:
+#     auto-compact-5.5-plus-padding-v1.
+#   ocaml-auto-compact-plus-padding-v2-fp: v2-style padding (before
+#     do_some_marking) applied on top of the patch. Verified via nm: shifts
+#     do_some_marking by a further 416 bytes (cache-line offset 48->16 — a
+#     THIRD distinct offset, different from both stock's 32 and the plain
+#     patch's 48). Branch: auto-compact-5.5-plus-padding-v2.
+#
+# See experiments/pplacer-gc-regression/alignment-artifact/plan-alignment-artifact.md
+
+includes:
+  - "pplacer_gc_regression.yml"
+
+overrides:
+  configs:
+    - "ocaml-5.5-fp|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-padded-fp|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-padded-v2-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-plus-padding-v1-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-plus-padding-v2-fp|perf_grp1|re-25|md-2"
+    - "socaml-fp|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-fp|perf_grp1|re-25|md-2"
+  runtimes:
+    ocaml-5.5-fp:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-5.5-padded-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "padding-test-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-5.5-padded-v2-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "padding-test-5.5-v2"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-plus-padding-v1-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5-plus-padding-v1"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-plus-padding-v2-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5-plus-padding-v2"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    socaml-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "socaml-chunk-only"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    socaml-auto-compact-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-frame-pointers"

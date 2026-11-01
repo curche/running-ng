@@ -1,0 +1,70 @@
+# =============================================================================
+# pplacer_testsuite GC-stats investigation — isolated single-benchmark config
+# =============================================================================
+# Spun out of macrobenchmarks_compactor_4way.yml to iterate quickly on just
+# pplacer_testsuite (~24-28s/invocation) instead of the full ~30-benchmark
+# suite. Same four runtimes/switches as the compactor-comparison experiment.
+#
+# See experiments/pplacer-gc-regression/plan-pplacer-gc-regression.md for the
+# investigation this supports.
+#
+# NOTE on benchmarks: filtering — macro_base.yml's `benchmarks:` block is a
+# dict merged key-by-key via Configuration.combine() (arrays extend, dicts
+# update — see src/running/config.py combine()). A top-level `benchmarks:`
+# key here only *replaces* the `macro-pplacer` entry; every other suite from
+# macro_base.yml stays in the merged dict untouched. To actually restrict the
+# run, `benchmarks:` MUST go under `overrides:`, which uses Configuration.override()
+# (plain key assignment, no merge) instead.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  benchmarks:
+    macro-pplacer:
+      - pplacer_testsuite
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    executable: "/home/curche/.opam/ocaml-auto-compact-20260701-144438/bin/ocaml"
+
+  socaml:
+    type: OCaml
+    executable: "/home/curche/.opam/socaml-20260630-140841/bin/ocaml"
+
+  socaml-auto-compact:
+    type: OCaml
+    executable: "/home/curche/.opam/socaml-auto-compact-20260629-131142/bin/ocaml"
+
+  # Same source as ocaml-auto-compact (ocaml-git branch auto-compact-5.5 @
+  # d2e194bce3, pushed to curche/ocaml on GitHub) but rebuilt with flambda
+  # optimizations and frame pointers enabled, to test whether the ~19-20%
+  # pplacer_testsuite regression is an artifact of unoptimized codegen
+  # (flambda off in the original build) rather than the auto-compact patch
+  # itself. Built automatically via running-ng's opam-compiler integration
+  # (OCaml._ensure_switch -> `opam compiler create`) on first use — no manual
+  # switch setup required. Switch name: running-ng-ocaml-auto-compact-flambda-fp.
+  ocaml-auto-compact-flambda-fp:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "--enable-flambda"
+      - "--enable-frame-pointers"
+
+# perf_grp1: task-clock,page-faults,cycles,instructions (matches original run)
+# perf_grp3: adds cache-misses,LLC-load-misses,dTLB/iTLB-load-misses — use this
+#            set if Phase 2 (below) implicates memory-layout/cache effects.
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-flambda-fp|perf_grp1|re-25|md-2"

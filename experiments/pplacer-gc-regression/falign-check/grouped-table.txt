@@ -1,0 +1,15 @@
+pplacer_testsuite: falign-check, grouped by lineage x build condition
+run id: turing-2026-07-16-Thu-181351, wall time in seconds (medians of 3 invocations)
+
+lineage                       plain      +fp     +falign   +fp+falign
+stock (ocaml-5.5)             23.65     25.87     27.30       26.29
+auto-compact                  28.04     27.41     27.13       26.29
+------------------------------------------------------------------------
+gap (auto-compact - stock)    +4.39     +1.54     -0.17        0.00
+
+The gap shrinks from +4.39s (plain, natural/unforced alignment) to
+essentially zero once -falign-functions=64 forces both binaries to the
+same cache-line offset (0) for do_some_marking/mark -- with or without
+-fp on top. This is the closing confirmation that the ocaml-auto-compact
+regression on pplacer_testsuite is a code-layout/cache-alignment artifact,
+not a real cost of the patch's logic.

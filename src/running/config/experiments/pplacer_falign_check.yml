@@ -1,0 +1,87 @@
+# Does forcing every function to the same cache-line alignment (via
+# gcc -falign-functions=64, no source changes) eliminate the
+# ocaml-auto-compact-fp regression? See
+# experiments/pplacer-gc-regression/falign-check/plan-falign-check.md.
+#
+# 2x2x2 matrix: {stock, auto-compact} x {plain, fp} x {default align, falign=64}
+#
+# 4 already exist (reused as-is):
+#   ocaml-5.5                 stock, plain, default align         (on record: 23.36-23.43s)
+#   ocaml-5.5-fp               stock, fp, default align            (on record: 25.7-25.9s)
+#   ocaml-auto-compact-scratch  patch, plain, default align         (on record: ~27.9-28.0s)
+#   ocaml-auto-compact-fp       patch, fp, default align            (on record: 27.4-27.6s)
+#
+# 4 new (this file):
+#   ocaml-5.5-falign            stock, plain, falign=64
+#   ocaml-5.5-fp-falign          stock, fp, falign=64
+#   ocaml-auto-compact-falign    patch, plain, falign=64
+#   ocaml-auto-compact-fp-falign patch, fp, falign=64
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  benchmarks:
+    macro-pplacer:
+      - pplacer_testsuite
+  configs:
+    - "ocaml-5.5|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-fp|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-fp-falign|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-scratch|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-fp-falign|perf_grp1|re-25|md-2"
+  runtimes:
+    ocaml-5.5:
+      type: OCaml
+      version: "5.5.0"
+
+    ocaml-5.5-fp:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-5.5-falign:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "CFLAGS=-falign-functions=64"
+
+    ocaml-5.5-fp-falign:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-frame-pointers"
+        - "CFLAGS=-falign-functions=64"
+
+    ocaml-auto-compact-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args: []
+
+    ocaml-auto-compact-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-falign:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "CFLAGS=-falign-functions=64"
+
+    ocaml-auto-compact-fp-falign:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+        - "CFLAGS=-falign-functions=64"

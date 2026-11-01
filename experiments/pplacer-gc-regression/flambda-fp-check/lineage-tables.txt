@@ -1,0 +1,18 @@
+pplacer_testsuite: per-lineage wall time and RSS across plain/fp/flambda/flambda+fp
+(percentages are vs. that lineage's own plain build)
+
+Wall time (s)
+-------------
+Lineage                              plain            fp              flambda          flambda+fp
+ocaml-5.5 (stock)                    23.36 (—)        25.73 (+10.1%)  28.17 (+20.6%)   27.52 (+17.8%)
+socaml (chunk allocator only)        27.88 (—)        26.29 (-5.7%)   23.27 (-16.5%)   25.34 (-9.1%)
+ocaml-auto-compact                   27.90 (—)        27.36 (-1.9%)   23.89 (-14.4%)   26.38 (-5.4%)
+socaml-auto-compact (both patches)   28.15 (—)        25.21 (-10.4%)  23.15 (-17.8%)   26.94 (-4.3%)
+
+Max RSS (MB)
+------------
+Lineage                              plain            fp              flambda          flambda+fp
+ocaml-5.5 (stock)                    70.0 (—)         70.2 (+0.3%)    75.1 (+7.3%)     75.5 (+7.9%)
+socaml (chunk allocator only)        70.1 (—)         70.0 (-0.1%)    75.3 (+7.4%)     75.6 (+7.8%)
+ocaml-auto-compact                   70.0 (—)         70.2 (+0.3%)    75.2 (+7.4%)     75.5 (+7.9%)
+socaml-auto-compact (both patches)   70.4 (—)         70.1 (-0.4%)    75.5 (+7.2%)     75.5 (+7.2%)

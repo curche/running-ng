@@ -1,0 +1,94 @@
+# Sanity check: rebuild every runtime used in this investigation completely
+# from scratch (fresh opam switch + fresh dune build for pplacer_testsuite)
+# and confirm the wall-time/RSS numbers reproduce what's already on record.
+#
+# All 9 switches are built fresh via running-ng's opam-compiler integration
+# under "-scratch"-suffixed names, distinct from any existing switch, so
+# nothing already built (including the manually-built executable-mode
+# switches used by macrobenchmarks_compactor_4way.yml) is touched or at risk.
+# Stock ocaml-5.5 is intentionally NOT rebuilt from scratch here — it's the
+# control, not part of what's under investigation, and its switch is the
+# user's active dev environment.
+#
+# Source refs (all on https://github.com/curche/ocaml.git):
+#   auto-compact-5.5   — ocaml-git branch, d2e194bce3 (already existed)
+#   new_compactor      — socaml-git branch, 34988cfd7b, = socaml-auto-compact (already existed)
+#   socaml-chunk-only  — socaml-git commit 7f6d55c648, = plain socaml (no auto-compact),
+#                        newly pushed as its own branch for this check (previously only
+#                        reachable as an ancestor commit of new_compactor)
+#
+# See experiments/pplacer-gc-regression/plan-pplacer-gc-regression.md.
+
+includes:
+  - "pplacer_gc_regression.yml"
+
+overrides:
+  configs:
+    - "ocaml-5.5|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-scratch|perf_grp1|re-25|md-2"
+    - "socaml-scratch|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-scratch|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-fp-scratch|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-flambda-fp-scratch|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-fp-scratch|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-flambda-scratch|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-flambda-fp-scratch|perf_grp1|re-25|md-2"
+  runtimes:
+    ocaml-5.5:
+      type: OCaml
+      version: "5.5.0"
+
+    ocaml-auto-compact-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args: []
+
+    socaml-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "socaml-chunk-only"
+      configure_args: []
+
+    socaml-auto-compact-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args: []
+
+    ocaml-auto-compact-fp-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-flambda-fp-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"
+
+    socaml-auto-compact-fp-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    socaml-auto-compact-flambda-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-flambda"
+
+    socaml-auto-compact-flambda-fp-scratch:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"

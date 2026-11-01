@@ -1,0 +1,27 @@
+pplacer_testsuite: all values, 13-config flambda/fp matrix (sorted by wall time)
+run id: turing-2026-07-15-Wed-005934, medians of 3 invocations, perf_grp1|re-25|md-2
+delta is vs. plain stock ocaml-5.5 (23.43s)
+
+AC = auto-compact patch (ocaml-auto-compact lineage)
+CA = new chunk-based compactor (socaml lineage)
+FL = flambda        FP = frame pointers
+(socaml-auto-compact = AC+CA both enabled)
+
+ AC  CA  FL  FP   wall(s)    delta  rss(MB)  gc_time   minor   major
+--------------------------------------------------------------------
+ x   x   x   -      23.15    -1.2%     75.5    17.26    8928    3547
+ -   x   x   -      23.27    -0.7%     75.3    17.37    8928    3549
+ -   -   -   -      23.43       --     70.1    17.23    9152    3557
+ x   -   x   -      23.89    +2.0%     75.2    17.42    8926    3546
+ x   x   -   x      25.21    +7.6%     70.1    18.81    9152    3561
+ -   x   x   x      25.34    +8.2%     75.6    19.26    8928    3548
+ -   -   -   x      25.73    +9.8%     70.2    19.19    9152    3557
+ -   x   -   x      26.29   +12.2%     70.0    19.87    9152    3561
+ x   -   x   x      26.38   +12.6%     75.5    20.21    8926    3546
+ x   x   x   x      26.94   +15.0%     75.5    20.83    8928    3549
+ x   -   -   x      27.36   +16.8%     70.2    20.78    9152    3557
+ -   -   x   x      27.52   +17.5%     75.5    21.33    8926    3545
+ -   -   x   -      28.17   +20.2%     75.1    21.65    8926    3545
+
+Note: row 13 (flambda only, no patches — plain stock OCaml with flambda) is
+the single slowest configuration in the entire 13-way matrix.

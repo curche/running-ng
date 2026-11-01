@@ -1,0 +1,152 @@
+# Does building with flambda / frame-pointers / both change the
+# pplacer_testsuite regression picture vs stock ocaml-5.5?
+#
+# Four source lines, each built the full plain/fp/flambda/flambda-fp matrix
+# (the two "no auto-compact" lines are new here — previously only their
+# plain variant existed):
+#
+#   stock 5.5.0 (upstream ocaml/ocaml.git, tag 5.5.0) — the control. Isolates
+#   what flambda/fp do to plain OCaml with NO auto-compact/new-compactor
+#   patch, so their effect on the patched lineages below can be separated
+#   from their effect on stock:
+#     - ocaml-5.5              plain            (on record: 23.4s, ~70MB)
+#     - ocaml-5.5-fp           --enable-frame-pointers                    (checked: 25.7s, 70.5MB)
+#     - ocaml-5.5-flambda      --enable-flambda                           (checked: 28.2s, 75.3MB)
+#     - ocaml-5.5-flambda-fp   --enable-flambda --enable-frame-pointers   (checked: 27.5s, 75.4MB)
+#
+#   auto-compact-5.5 (ocaml-git, commit d2e194bce3, pushed as
+#   curche/ocaml:auto-compact-5.5):
+#     - ocaml-auto-compact             plain            (on record: 27.90s, 70.0MB)
+#     - ocaml-auto-compact-fp          --enable-frame-pointers  (checked: 27.43-27.52s, 70.0-70.2MB)
+#     - ocaml-auto-compact-flambda     --enable-flambda                           [new]
+#     - ocaml-auto-compact-flambda-fp  --enable-flambda --enable-frame-pointers
+#                                                        (checked: 26.4s, 75.4MB)
+#
+#   socaml-chunk-only (socaml-git, commit 7f6d55c648, "Introduce chunk-based
+#   pool allocation and two-phase compaction" — the new compactor WITHOUT
+#   auto-compact on top; pushed as curche/ocaml:socaml-chunk-only):
+#     - socaml                 plain            (on record: 27.88-27.90s, 69.8-70.1MB)
+#     - socaml-fp              --enable-frame-pointers                    [new]
+#     - socaml-flambda         --enable-flambda                           [new]
+#     - socaml-flambda-fp      --enable-flambda --enable-frame-pointers   [new]
+#
+#   new_compactor (socaml-git, commit 34988cfd7b, pushed as
+#   curche/ocaml:new_compactor):
+#     - socaml-auto-compact            plain            (on record: 28.15s, 70.4MB)
+#     - socaml-auto-compact-fp         --enable-frame-pointers  (checked: 25.2s, 70MB)
+#     - socaml-auto-compact-flambda    --enable-flambda         (checked: 23.1s, 75.4-75.7MB)
+#     - socaml-auto-compact-flambda-fp --enable-flambda --enable-frame-pointers
+#                                                        (checked: 26.9s, 75.3-75.7MB)
+#
+# All built automatically via running-ng's opam-compiler integration
+# (OCaml._ensure_switch -> `opam compiler create`) on first use.
+#
+# See experiments/pplacer-gc-regression/plan-pplacer-gc-regression.md.
+
+includes:
+  - "pplacer_gc_regression.yml"
+
+overrides:
+  configs:
+    - "ocaml-5.5|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-fp|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-flambda|perf_grp1|re-25|md-2"
+    - "ocaml-5.5-flambda-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-fp|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-flambda|perf_grp1|re-25|md-2"
+    - "ocaml-auto-compact-flambda-fp|perf_grp1|re-25|md-2"
+    - "socaml-fp|perf_grp1|re-25|md-2"
+    - "socaml-flambda|perf_grp1|re-25|md-2"
+    - "socaml-flambda-fp|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-fp|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-flambda|perf_grp1|re-25|md-2"
+    - "socaml-auto-compact-flambda-fp|perf_grp1|re-25|md-2"
+  runtimes:
+    ocaml-5.5:
+      type: OCaml
+      version: "5.5.0"
+
+    ocaml-5.5-fp:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-5.5-flambda:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-flambda"
+
+    ocaml-5.5-flambda-fp:
+      type: OCaml
+      version: "5.5.0"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    ocaml-auto-compact-flambda:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-flambda"
+
+    ocaml-auto-compact-flambda-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "auto-compact-5.5"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"
+
+    socaml-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "socaml-chunk-only"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    socaml-flambda:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "socaml-chunk-only"
+      configure_args:
+        - "--enable-flambda"
+
+    socaml-flambda-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "socaml-chunk-only"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"
+
+    socaml-auto-compact-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-frame-pointers"
+
+    socaml-auto-compact-flambda:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-flambda"
+
+    socaml-auto-compact-flambda-fp:
+      type: OCaml
+      repo: "https://github.com/curche/ocaml.git"
+      commit: "new_compactor"
+      configure_args:
+        - "--enable-flambda"
+        - "--enable-frame-pointers"

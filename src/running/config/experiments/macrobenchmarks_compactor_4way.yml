@@ -1,0 +1,93 @@
+# =============================================================================
+# Macro-benchmarks — 4-way compactor comparison
+# =============================================================================
+# Four compiler variants crossing two independent GC changes:
+#
+#   ocaml-5.5           : OCaml 5.5.0 — stock runtime, stock compactor
+#   ocaml-auto-compact  : OCaml 5.5 + automatic compaction only
+#                         (branch: auto-compact-5.5 in ocaml-git)
+#   socaml              : OCaml 5.5 + chunk-based pool compactor, no auto-compact
+#                         (new_compactor branch @ 7f6d55c648 in socaml-git)
+#   socaml-auto-compact : OCaml 5.5 + chunk-based compactor + automatic compaction
+#                         (new_compactor branch @ 34988cfd7b in socaml-git)
+#
+# Comparisons:
+#   ocaml-5.5         → ocaml-auto-compact  : effect of auto-compaction alone
+#   ocaml-5.5         → socaml              : effect of new compactor alone
+#   socaml            → socaml-auto-compact : adding auto-compaction to new compactor
+#   ocaml-5.5         → socaml-auto-compact : combined effect (sanity check)
+#
+# Pre-built opam switches used for the three non-stock runtimes (executable mode).
+# Ensure dune and ocamlfind are present in each switch:
+#
+#   opam install dune ocamlfind --switch ocaml-auto-compact-20260701-144438 --yes
+#   opam install dune ocamlfind --switch socaml-20260630-140841 --yes
+#   opam install dune ocamlfind --switch socaml-auto-compact-20260629-131142 --yes
+#
+# Follow-on: sweep O= values (100, 200, 500, 1000, 2000) on the two auto-compact
+# runtimes to find the optimal max_overhead threshold.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  suites.macro-coq-monorepo.timeout: 300
+
+# =============================================================================
+# Runtimes
+# =============================================================================
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  # Stock OCaml 5.5 + automatic compaction only (no chunk-based compactor).
+  # ocaml-git branch auto-compact-5.5 @ d2e194bce3
+  ocaml-auto-compact:
+    type: OCaml
+    executable: "/home/curche/.opam/ocaml-auto-compact-20260701-144438/bin/ocaml"
+
+  # Chunk-based pool compactor only, no automatic compaction.
+  # socaml-git new_compactor branch @ 7f6d55c648
+  socaml:
+    type: OCaml
+    executable: "/home/curche/.opam/socaml-20260630-140841/bin/ocaml"
+
+  # Chunk-based pool compactor + automatic compaction.
+  # socaml-git new_compactor branch @ 34988cfd7b
+  socaml-auto-compact:
+    type: OCaml
+    executable: "/home/curche/.opam/socaml-auto-compact-20260629-131142/bin/ocaml"
+
+# =============================================================================
+# Configs — default GC settings
+# =============================================================================
+# re-25: 256 MB per-domain ring (required for owl_gc).
+# md-2: minimum domain count for sequential workloads.
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+
+# =============================================================================
+# Comparisons
+# =============================================================================
+comparisons:
+  - label: "auto-compaction alone (5.5 baseline)"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+
+  - label: "new compactor alone (no auto-compaction)"
+    a: ocaml-5.5
+    b: socaml
+
+  - label: "adding auto-compaction to new compactor"
+    a: socaml
+    b: socaml-auto-compact
+
+  - label: "combined effect of both changes"
+    a: ocaml-5.5
+    b: socaml-auto-compact

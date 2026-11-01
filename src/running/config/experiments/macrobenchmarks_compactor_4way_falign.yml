@@ -1,0 +1,129 @@
+# =============================================================================
+# Macro-benchmarks — 4-way compactor comparison, built with -falign-functions=64
+# =============================================================================
+# Same 4-way compactor comparison as macrobenchmarks_compactor_4way.yml, but
+# every runtime additionally built with CFLAGS=-falign-functions=64 (forces
+# every function to a 64-byte cache-line-aligned address — confirmed via nm
+# in experiments/pplacer-gc-regression/falign-check/). Tests whether
+# pplacer_testsuite's regression (already confirmed in that investigation to
+# be a pure code-layout artifact) disappears across the WHOLE suite once
+# alignment is forced identical, and whether any other benchmark's
+# regression (e.g. owl_gc's) is also alignment-driven vs a real behavioral
+# difference.
+#
+# Four compiler variants crossing two independent GC changes:
+#
+#   ocaml-5.5-falign           : OCaml 5.5.0 — stock runtime, stock compactor
+#   ocaml-auto-compact-falign  : OCaml 5.5 + automatic compaction only
+#                                (branch: auto-compact-5.5 in ocaml-git)
+#   socaml-falign              : OCaml 5.5 + chunk-based pool compactor, no auto-compact
+#                                (new_compactor branch @ 7f6d55c648 in socaml-git,
+#                                 pushed as curche/ocaml:socaml-chunk-only)
+#   socaml-auto-compact-falign : OCaml 5.5 + chunk-based compactor + automatic compaction
+#                                (new_compactor branch @ 34988cfd7b in socaml-git)
+#
+# Comparisons:
+#   ocaml-5.5-falign         → ocaml-auto-compact-falign  : effect of auto-compaction alone
+#   ocaml-5.5-falign         → socaml-falign              : effect of new compactor alone
+#   socaml-falign            → socaml-auto-compact-falign : adding auto-compaction to new compactor
+#   ocaml-5.5-falign         → socaml-auto-compact-falign : combined effect (sanity check)
+#
+# All 4 runtimes built via running-ng's opam-compiler integration
+# (type: OCaml + repo:/commit:/configure_args:) — no manual switch setup.
+# ocaml-5.5-falign and ocaml-auto-compact-falign already exist (built for the
+# pplacer-only falign-check experiment); socaml-falign and
+# socaml-auto-compact-falign are new here.
+#
+# Runtime names are suffixed -falign (not reusing the plain names) because
+# running-ng derives opam switch names from the runtime's YAML key alone —
+# reusing "ocaml-5.5" etc. would silently resolve to the existing PLAIN
+# switch instead of building a new aligned one.
+#
+# See experiments/pplacer-falign-full-suite/plan-falign-full-suite.md.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  suites.macro-coq-monorepo.timeout: 300
+
+# =============================================================================
+# Runtimes
+# =============================================================================
+runtimes:
+  # Plain stock, no falign — in-run reference point so this run doesn't
+  # need to rely on the separate non-falign full-suite run for comparison.
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  # Stock OCaml 5.5 + automatic compaction only (no chunk-based compactor).
+  # ocaml-git branch auto-compact-5.5 @ d2e194bce3
+  ocaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  # Chunk-based pool compactor only, no automatic compaction.
+  # socaml-git new_compactor branch @ 7f6d55c648
+  socaml-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "socaml-chunk-only"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  # Chunk-based pool compactor + automatic compaction.
+  # socaml-git new_compactor branch @ 34988cfd7b
+  socaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+# =============================================================================
+# Configs — default GC settings
+# =============================================================================
+# re-25: 256 MB per-domain ring (required for owl_gc).
+# md-2: minimum domain count for sequential workloads.
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"
+  - "socaml-falign|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact-falign|perf_grp1|re-25|md-2"
+
+# =============================================================================
+# Comparisons
+# =============================================================================
+comparisons:
+  - label: "effect of falign=64 alone on stock"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign
+
+  - label: "auto-compaction alone (5.5 baseline), falign=64"
+    a: ocaml-5.5-falign
+    b: ocaml-auto-compact-falign
+
+  - label: "new compactor alone (no auto-compaction), falign=64"
+    a: ocaml-5.5-falign
+    b: socaml-falign
+
+  - label: "adding auto-compaction to new compactor, falign=64"
+    a: socaml-falign
+    b: socaml-auto-compact-falign
+
+  - label: "combined effect of both changes, falign=64"
+    a: ocaml-5.5-falign
+    b: socaml-auto-compact-falign

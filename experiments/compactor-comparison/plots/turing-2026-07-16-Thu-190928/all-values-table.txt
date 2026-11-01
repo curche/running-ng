@@ -1,0 +1,38 @@
+compactor-comparison: all benchmarks, wall time (median of 3 invocations)
+run id: turing-2026-07-16-Thu-190928 -- extracted directly from olly_*.json sidecars
+-- = build failed / did not run for that runtime
+nan = corrupted olly wall_time (runtime-events ring buffer overflow, known olly issue)
+percentages are vs ocaml-5.5 (stock) for the same benchmark
+
+benchmark              ocaml-5.5 auto-compact     socaml            socaml-auto-compact
+---------------------------------------------------------------------------------------
+alt_ergo_fill          19.96s  19.17s (-4.0%)   --                --               
+alt_ergo_unsat_smt2    15.07s  15.07s (+0.0%)   --                --               
+alt_ergo_yyll          23.46s  23.22s (-1.0%)   --                --               
+coqc_corelib_stress    nan     nan              nan               nan              
+cpdf_blacktext         9.46s   9.34s (-1.3%)    9.35s (-1.2%)     9.36s (-1.1%)    
+cpdf_merge             7.98s   7.76s (-2.8%)    7.81s (-2.1%)     7.80s (-2.3%)    
+cpdf_scale             49.56s  48.91s (-1.3%)   49.33s (-0.5%)    49.26s (-0.6%)   
+cpdf_squeeze           12.91s  12.68s (-1.8%)   12.77s (-1.1%)    12.70s (-1.6%)   
+devkit_gzip            13.34s  13.36s (+0.1%)   --                --               
+devkit_htmlstream      31.90s  31.79s (-0.3%)   --                --               
+devkit_network         21.02s  20.91s (-0.5%)   --                --               
+devkit_stre            16.13s  16.14s (+0.1%)   --                --               
+eio_fiber_stream       8.05s   8.20s (+1.9%)    8.62s (+7.1%)     8.58s (+6.6%)    
+frama_c_eva_sqlite     36.40s  36.71s (+0.9%)   --                --               
+frama_c_eva_t          1.76s   1.74s (-1.1%)    --                --               
+irmin_mem_rw           15.74s  15.95s (+1.3%)   --                --               
+jsoo                   11.35s  --               --                --               
+liq_parse_typecheck    40.32s  39.38s (-2.3%)   --                --               
+liq_video_frames_pool  15.23s  15.25s (+0.1%)   15.25s (+0.1%)    15.23s (+0.0%)   
+menhir_ocamly          42.98s  43.02s (+0.1%)   43.59s (+1.4%)    43.49s (+1.2%)   
+menhir_sql_parser      4.70s   4.59s (-2.3%)    4.68s (-0.4%)     4.68s (-0.4%)    
+menhir_sysver          30.52s  29.73s (-2.6%)   30.50s (-0.1%)    30.56s (+0.1%)   
+ocamlc_self_compile    11.95s  --               --                --               
+ocamlformat_rocq       7.00s   6.85s (-2.1%)    6.73s (-3.9%)     6.66s (-4.9%)    
+owl_gc                 16.57s  20.78s (+25.4%)  36.31s (+119.1%)  35.45s (+113.9%) 
+pplacer_testsuite      23.47s  28.00s (+19.3%)  27.90s (+18.9%)   28.13s (+19.9%)  
+sedlex_tokenize        6.98s   7.11s (+1.9%)    --                --               
+test_decompress        6.78s   6.79s (+0.1%)    6.84s (+0.9%)     6.82s (+0.6%)    
+ydump_repeat           7.96s   8.00s (+0.5%)    7.90s (-0.8%)     7.92s (-0.5%)    
+zarith_pi              11.85s  11.97s (+1.0%)   9.29s (-21.6%)    9.31s (-21.4%)   
