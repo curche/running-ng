@@ -1,0 +1,94 @@
+# =============================================================================
+# 5.5 vs. 5.5.1 vs. trunk, with/without automatic compaction (re-run)
+# =============================================================================
+# Re-run of ../trunk-auto-compact-comparison/ after fixing the ppxlib/trunk
+# build gap: 12 of 29 benchmarks failed to build on BOTH `ocaml-trunk` and
+# `ocaml-auto-compact-trunk` with a "does not match Parsetree.<X>_desc"
+# structural-equality error -- trunk's real Parsetree gained two new "hole"
+# constructors (Pexp_hole, Pmod_hole; see parsing/parsetree.mli) that the
+# vendored ppxlib's `astlib/ast_506.ml` (its mirror of the 5.6 Parsetree
+# shape) doesn't have yet. Fixed by adding both constructors to
+# duniverse/ppxlib/astlib/ast_506.ml (matching trunk's real definitions) plus
+# an inert downgrade-migration case in migrate_506_505.ml (assert false --
+# ppxlib's 5.05-pivot AST has no hole equivalent, and our benchmarks never
+# construct one in practice). See ../trunk-auto-compact-comparison/results.md
+# for the fuller writeup and worklog.md here for the fix details -- this is
+# the OPPOSITE direction of the socaml/Ptyp_functor fix from
+# auto-compact-tuning Phase 10 (there, the *compiler* was missing a
+# constructor ppxlib expected; here, *ppxlib* is missing a constructor the
+# compiler actually has).
+#
+# Net result: 28/29 benchmarks now build on both trunk runtimes (up from
+# 17/29). The one remaining gap is `infer_default` on `ocaml-auto-compact-
+# trunk` specifically -- its javalib/sawja vendoring step shells out to a
+# raw `make`+`ocamlfind`, and `ocamlfind`'s compiler binding is tied to
+# whichever opam switch is active (`running-ng-ocaml-trunk`, used for
+# dune/ocamlfind tooling since `ocaml-auto-compact-trunk` has no opam switch
+# of its own -- see below), not to the PATH-prepended
+# `ocaml-auto-compact-trunk` compiler the rest of the build correctly uses.
+# Produces a real (not spurious) "inconsistent assumptions over
+# implementation Unix" linking error. Narrow, structural limitation of the
+# `executable:` runtime-mode workaround for this one non-dune build step;
+# not fixed here.
+#
+# Same 5 runtimes as ../trunk-auto-compact-comparison/, per instruction
+# ("the current set of 5 variants should be enough").
+#
+# Usage:
+#   RUNNING_MACRO_BENCH_DIR=~/git/macro-benches \
+#   CONFIG_FILE=$(pwd)/config.yml \
+#   LOG_DIR=$(pwd)/logs/full \
+#     bash ../../run_ocaml_bench_gc_sweep.sh
+#
+# Or simply: `make run` from this directory (see Makefile).
+# =============================================================================
+
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  ocaml-5.5.1:
+    type: OCaml
+    version: "5.5.1"
+
+  ocaml-trunk:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "eba18e50bed58cbf5d3e0071e9528a492eda8ac9"
+
+  ocaml-auto-compact-trunk:
+    type: OCaml
+    executable: "/home/curche/opt/ocaml-auto-compact-trunk/bin/ocaml"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "ocaml-5.5.1|perf_grp1|re-25|md-2"
+  - "ocaml-trunk|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-trunk|perf_grp1|re-25|md-2"
+
+comparisons:
+  - label: "auto-compaction alone, on 5.5.0"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+  - label: "patch release alone (5.5.0 -> 5.5.1, no auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-5.5.1
+  - label: "version freshness alone (5.5.0 -> trunk, no auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-trunk
+  - label: "auto-compaction alone, on trunk"
+    a: ocaml-trunk
+    b: ocaml-auto-compact-trunk
+  - label: "combined effect (5.5.0 stock -> trunk + auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-auto-compact-trunk

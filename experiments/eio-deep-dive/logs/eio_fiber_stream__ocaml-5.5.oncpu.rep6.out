@@ -1,0 +1,11 @@
+Processed 60000000 items in 3.344s (4 producers, 4 consumers)
+[ perf record: Woken up 1424 times to write data ]
+Warning:
+Processed 4496 events and lost 745 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 3342 samples and lost 33.51%!
+
+[ perf record: Captured and wrote 11.135 MB /home/curche/git/running-ng/experiments/eio-deep-dive/perf-data/eio_fiber_stream__ocaml-5.5.rep6.data (2222 samples) ]

@@ -1,0 +1,2 @@
+[ perf record: Woken up 201 times to write data ]
+[ perf record: Captured and wrote 50.251 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/ocamlc_self_compile__socaml-auto-compact.rep3.data (4707 samples) ]

@@ -1,0 +1,1898 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1600" height="358" onload="init(evt)" viewBox="0 0 1600 358" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1600.0" height="358.0" fill="url(#background)"  />
+<text id="title" x="800.00" y="24" >test_decompress: ocaml-5.5 vs socaml (red=more time in ocaml-5.5)</text>
+<text id="details" x="10.00" y="341" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1490.00" y="24" >Search</text>
+<text id="ignorecase" x="1574.00" y="24" >ic</text>
+<text id="matched" x="1490.00" y="341" > </text>
+<g id="frames">
+<g >
+<title>caml_fresh_oo_id (3,941,876 samples, 0.01%; -0.05%)</title><rect x="95.8" y="261" width="0.2" height="15.0" fill="rgb(186,186,255)" rx="2" ry="2" />
+<text  x="98.76" y="271.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (106,537,451 samples, 0.36%; +0.05%)</title><rect x="1567.4" y="85" width="5.7" height="15.0" fill="rgb(255,186,186)" rx="2" ry="2" />
+<text  x="1570.44" y="95.5" ></text>
+</g>
+<g >
+<title>caml_sweep (2,925,920 samples, 0.01%; 0.00%)</title><rect x="396.4" y="165" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.35" y="175.5" ></text>
+</g>
+<g >
+<title>caml_alloc_string (23,575,041 samples, 0.08%; 0.00%)</title><rect x="255.3" y="261" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="271.5" ></text>
+</g>
+<g >
+<title>De.take_1342 (83,089,659 samples, 0.28%; +0.00%)</title><rect x="1418.8" y="101" width="4.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1421.82" y="111.5" ></text>
+</g>
+<g >
+<title>De.blit2_1049 (75,094,248 samples, 0.25%; -0.03%)</title><rect x="1577.1" y="117" width="3.9" height="15.0" fill="rgb(198,198,255)" rx="2" ry="2" />
+<text  x="1580.06" y="127.5" ></text>
+</g>
+<g >
+<title>De.cmd_2417 (157,719,977 samples, 0.53%; +0.09%)</title><rect x="547.8" y="149" width="8.4" height="15.0" fill="rgb(255,168,168)" rx="2" ry="2" />
+<text  x="550.80" y="159.5" ></text>
+</g>
+<g >
+<title>De.huffman_1458 (47,316,716 samples, 0.16%; +0.04%)</title><rect x="1359.4" y="165" width="2.6" height="15.0" fill="rgb(255,191,191)" rx="2" ry="2" />
+<text  x="1362.45" y="175.5" ></text>
+</g>
+<g >
+<title>De.add_1387 (1,026,521,107 samples, 3.44%; +0.05%)</title><rect x="1521.0" y="133" width="54.4" height="15.0" fill="rgb(255,185,185)" rx="2" ry="2" />
+<text  x="1524.00" y="143.5" >De.ad..</text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (11,748,199 samples, 0.04%; +0.01%)</title><rect x="1300.5" y="117" width="0.6" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1303.45" y="127.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small (3,966,834 samples, 0.01%; +0.01%)</title><rect x="361.2" y="229" width="0.3" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="364.25" y="239.5" ></text>
+</g>
+<g >
+<title>De.update_1383 (27,813,539 samples, 0.09%; 0.00%)</title><rect x="1354.2" y="149" width="1.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1357.22" y="159.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (2,925,920 samples, 0.01%; 0.00%)</title><rect x="396.4" y="213" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.35" y="223.5" ></text>
+</g>
+<g >
+<title>Stdlib.Random.int_926 (2,952,344 samples, 0.01%; +0.00%)</title><rect x="1347.7" y="197" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1350.69" y="207.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (35,507,070 samples, 0.12%; +0.03%)</title><rect x="219.2" y="277" width="1.9" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="222.21" y="287.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_1 (102,709,558 samples, 0.34%; -0.07%)</title><rect x="186.9" y="261" width="5.5" height="15.0" fill="rgb(178,178,255)" rx="2" ry="2" />
+<text  x="189.95" y="271.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (102,451,675 samples, 0.34%; -0.01%)</title><rect x="422.0" y="181" width="5.5" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="425.04" y="191.5" ></text>
+</g>
+<g >
+<title>Zl.make_block_inner_2171 (908,564,286 samples, 3.05%; 0.00%)</title><rect x="1295.4" y="181" width="48.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1298.45" y="191.5" >Zl.m..</text>
+</g>
+<g >
+<title>De.slow_blit2_1038 (7,931,397 samples, 0.03%; +0.01%)</title><rect x="154.4" y="261" width="0.4" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="157.43" y="271.5" ></text>
+</g>
+<g >
+<title>De.make_table_1708 (4,257,292,009 samples, 14.27%; -0.01%)</title><rect x="1362.2" y="165" width="225.5" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1365.17" y="175.5" >De.make_table_1708</text>
+</g>
+<g >
+<title>Stdlib.Bytes.sub_309 (19,762,067 samples, 0.07%; 0.00%)</title><rect x="131.3" y="277" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="134.30" y="287.5" ></text>
+</g>
+<g >
+<title>do_some_marking (372,541,180 samples, 1.25%; +0.16%)</title><rect x="402.1" y="149" width="19.7" height="15.0" fill="rgb(255,135,135)" rx="2" ry="2" />
+<text  x="405.10" y="159.5" ></text>
+</g>
+<g >
+<title>De.take_1342 (11,903,876 samples, 0.04%; +0.01%)</title><rect x="1360.9" y="117" width="0.6" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1363.91" y="127.5" ></text>
+</g>
+<g >
+<title>mark_stack_push_block (3,960,468 samples, 0.01%; -0.00%)</title><rect x="400.0" y="101" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="403.01" y="111.5" ></text>
+</g>
+<g >
+<title>De.prefix_1434 (23,680,215 samples, 0.08%; 0.00%)</title><rect x="1360.3" y="149" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1363.29" y="159.5" ></text>
+</g>
+<g >
+<title>unlink_chunk.isra.0 (3,923,365 samples, 0.01%; +0.01%)</title><rect x="396.1" y="181" width="0.3" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="399.15" y="191.5" ></text>
+</g>
+<g >
+<title>De.code_2423 (15,766,995 samples, 0.05%; -0.04%)</title><rect x="1289.4" y="165" width="0.8" height="15.0" fill="rgb(192,192,255)" rx="2" ry="2" />
+<text  x="1292.39" y="175.5" ></text>
+</g>
+<g >
+<title>Bigstringaf.blit_to_bytes_756 (3,951,000 samples, 0.01%; +0.01%)</title><rect x="1348.2" y="197" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1351.15" y="207.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_N (476,886,595 samples, 1.60%; -0.01%)</title><rect x="192.4" y="261" width="25.3" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="195.39" y="271.5" >c..</text>
+</g>
+<g >
+<title>Bigstringaf.blit_to_bytes_756 (23,562,526 samples, 0.08%; 0.00%)</title><rect x="11.3" y="277" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="14.25" y="287.5" ></text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (23,538,465 samples, 0.08%; +0.07%)</title><rect x="1299.0" y="85" width="1.2" height="15.0" fill="rgb(255,180,180)" rx="2" ry="2" />
+<text  x="1302.00" y="95.5" ></text>
+</g>
+<g >
+<title>caml_blit_bytes (19,762,067 samples, 0.07%; 0.00%)</title><rect x="131.3" y="261" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="134.30" y="271.5" ></text>
+</g>
+<g >
+<title>Stdlib.Array.map2_371 (110,256,204 samples, 0.37%; -0.08%)</title><rect x="1301.1" y="117" width="5.8" height="15.0" fill="rgb(173,173,255)" rx="2" ry="2" />
+<text  x="1304.08" y="127.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1372 (355,152,899 samples, 1.19%; 0.00%)</title><rect x="1106.8" y="133" width="18.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1109.81" y="143.5" ></text>
+</g>
+<g >
+<title>caml_do_pending_actions_res (482,030,522 samples, 1.62%; -0.01%)</title><rect x="396.5" y="229" width="25.5" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="399.51" y="239.5" >c..</text>
+</g>
+<g >
+<title>caml_ba_get_1 (90,463,487 samples, 0.30%; +0.01%)</title><rect x="221.1" y="277" width="4.8" height="15.0" fill="rgb(255,205,205)" rx="2" ry="2" />
+<text  x="224.09" y="287.5" ></text>
+</g>
+<g >
+<title>caml_ba_offset (110,412,030 samples, 0.37%; -0.03%)</title><rect x="229.8" y="277" width="5.9" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="232.82" y="287.5" ></text>
+</g>
+<g >
+<title>unlink_chunk.isra.0 (3,958,482 samples, 0.01%; +0.01%)</title><rect x="430.1" y="133" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="433.13" y="143.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (134,135,772 samples, 0.45%; +0.31%)</title><rect x="1125.6" y="133" width="7.1" height="15.0" fill="rgb(255,71,71)" rx="2" ry="2" />
+<text  x="1128.62" y="143.5" ></text>
+</g>
+<g >
+<title>De.longest_match_3618 (4,929,824,103 samples, 16.53%; -0.46%)</title><rect x="667.4" y="165" width="261.2" height="15.0" fill="rgb(0,0,255)" rx="2" ry="2" />
+<text  x="670.44" y="175.5" >De.longest_match_3618</text>
+</g>
+<g >
+<title>De.peek_exn_2399 (78,983,267 samples, 0.26%; -0.03%)</title><rect x="90.8" y="277" width="4.2" height="15.0" fill="rgb(194,194,255)" rx="2" ry="2" />
+<text  x="93.79" y="287.5" ></text>
+</g>
+<g >
+<title>De.huffman_1458 (1,207,754,798 samples, 4.05%; -0.01%)</title><rect x="1362.2" y="149" width="63.9" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1365.17" y="159.5" >De.huff..</text>
+</g>
+<g >
+<title>De.pqremove_2237 (3,943,406 samples, 0.01%; -0.01%)</title><rect x="96.0" y="277" width="0.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="98.97" y="287.5" ></text>
+</g>
+<g >
+<title>Stdlib.Bytes.init_291 (31,015,179 samples, 0.10%; +0.00%)</title><rect x="1346.5" y="229" width="1.7" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="1349.51" y="239.5" ></text>
+</g>
+<g >
+<title>caml_sweep (38,261,307 samples, 0.13%; -0.00%)</title><rect x="428.9" y="181" width="2.1" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="431.94" y="191.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (23,575,041 samples, 0.08%; 0.00%)</title><rect x="255.3" y="197" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="207.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (3,961,564 samples, 0.01%; +0.00%)</title><rect x="1354.6" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1357.64" y="111.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (3,947,886 samples, 0.01%; -0.00%)</title><rect x="149.6" y="261" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="152.64" y="271.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Test_decompress.fn_1018 (27,935,626 samples, 0.09%; 0.00%)</title><rect x="1346.7" y="213" width="1.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1349.67" y="223.5" ></text>
+</g>
+<g >
+<title>De.l_header_1800 (3,929,934 samples, 0.01%; +0.01%)</title><rect x="80.1" y="277" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="83.12" y="287.5" ></text>
+</g>
+<g >
+<title>De.go_2788 (15,768,402 samples, 0.05%; -0.00%)</title><rect x="1284.8" y="181" width="0.9" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1287.81" y="191.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Test_decompress.entry (21,813,970,514 samples, 73.14%; 0.00%)</title><rect x="434.2" y="245" width="1155.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.17" y="255.5" >Dune.exe.Test_decompress.entry</text>
+</g>
+<g >
+<title>Dune.exe.Test_decompress.go_424 (3,958,189 samples, 0.01%; -0.00%)</title><rect x="434.2" y="197" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="437.17" y="207.5" ></text>
+</g>
+<g >
+<title>Stdlib.Char.chr_276 (7,887,695 samples, 0.03%; +0.03%)</title><rect x="1295.0" y="165" width="0.4" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1298.03" y="175.5" ></text>
+</g>
+<g >
+<title>De.longest_match_3618 (205,452,225 samples, 0.69%; +0.05%)</title><rect x="953.7" y="149" width="10.9" height="15.0" fill="rgb(255,186,186)" rx="2" ry="2" />
+<text  x="956.70" y="159.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (66,242,052 samples, 0.22%; -0.05%)</title><rect x="396.7" y="133" width="3.5" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="399.71" y="143.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (7,912,055 samples, 0.03%; -0.01%)</title><rect x="96.6" y="277" width="0.4" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="99.60" y="287.5" ></text>
+</g>
+<g >
+<title>Zl.go_1787 (17,221,699,392 samples, 57.74%; 0.00%)</title><rect x="434.2" y="213" width="912.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.17" y="223.5" >Zl.go_1787</text>
+</g>
+<g >
+<title>caml_alloc_small_dispatch (2,925,920 samples, 0.01%; 0.00%)</title><rect x="396.4" y="229" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.35" y="239.5" ></text>
+</g>
+<g >
+<title>caml_call_gc (168,391,825 samples, 0.56%; 0.00%)</title><rect x="422.0" y="277" width="9.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="287.5" ></text>
+</g>
+<g >
+<title>De.fun_4988 (3,953,610 samples, 0.01%; +0.01%)</title><rect x="1589.4" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1592.37" y="159.5" ></text>
+</g>
+<g >
+<title>De.write_2852 (55,337,127 samples, 0.19%; -0.05%)</title><rect x="1343.6" y="181" width="2.9" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="1346.58" y="191.5" ></text>
+</g>
+<g >
+<title>De.c_short_2733 (7,869,411 samples, 0.03%; +0.03%)</title><rect x="1283.8" y="181" width="0.4" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1286.77" y="191.5" ></text>
+</g>
+<g >
+<title>De.decode_k_1812 (3,796,513 samples, 0.01%; +0.01%)</title><rect x="1349.0" y="181" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1351.99" y="191.5" ></text>
+</g>
+<g >
+<title>De.record_1751 (31,537,111 samples, 0.11%; -0.04%)</title><rect x="1587.7" y="165" width="1.7" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="1590.70" y="175.5" ></text>
+</g>
+<g >
+<title>caml_mark_roots_stw (78,735,623 samples, 0.26%; 0.00%)</title><rect x="422.0" y="165" width="4.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="175.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (23,575,041 samples, 0.08%; 0.00%)</title><rect x="255.3" y="213" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="223.5" ></text>
+</g>
+<g >
+<title>caml_check_pending_actions (3,882,170 samples, 0.01%; +0.01%)</title><rect x="431.0" y="277" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="433.97" y="287.5" ></text>
+</g>
+<g >
+<title>De.cmd_2417 (15,634,845 samples, 0.05%; -0.00%)</title><rect x="949.3" y="133" width="0.8" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="952.31" y="143.5" ></text>
+</g>
+<g >
+<title>update_major_slice_work (3,881,665 samples, 0.01%; +0.01%)</title><rect x="421.8" y="165" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="424.84" y="175.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,929,083 samples, 0.01%; +0.01%)</title><rect x="1589.8" y="277" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1592.79" y="287.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (3,941,042 samples, 0.01%; -0.03%)</title><rect x="96.2" y="277" width="0.2" height="15.0" fill="rgb(198,198,255)" rx="2" ry="2" />
+<text  x="99.18" y="287.5" ></text>
+</g>
+<g >
+<title>mark (15,742,485 samples, 0.05%; 0.00%)</title><rect x="255.7" y="181" width="0.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.69" y="191.5" ></text>
+</g>
+<g >
+<title>Zl.compress_1706 (16,009,837,222 samples, 53.68%; 0.00%)</title><rect x="434.4" y="197" width="848.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.38" y="207.5" >Zl.compress_1706</text>
+</g>
+<g >
+<title>De.dynamic_of_frequencies_2661 (908,564,286 samples, 3.05%; 0.00%)</title><rect x="1295.4" y="165" width="48.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1298.45" y="175.5" >De.d..</text>
+</g>
+<g >
+<title>caml_scan_stack (3,842,709 samples, 0.01%; +0.01%)</title><rect x="396.5" y="117" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="399.51" y="127.5" ></text>
+</g>
+<g >
+<title>De.backward_1439 (3,900,951 samples, 0.01%; -0.05%)</title><rect x="1367.6" y="101" width="0.2" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="1370.60" y="111.5" ></text>
+</g>
+<g >
+<title>Stdlib.Buffer.add_subbytes_701 (3,960,509 samples, 0.01%; +0.00%)</title><rect x="1348.4" y="197" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1351.36" y="207.5" ></text>
+</g>
+<g >
+<title>[test_decompress-ocaml-5.5] (3,905,423 samples, 0.01%; 0.00%)</title><rect x="132.7" y="277" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="135.73" y="287.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (59,354,606 samples, 0.20%; -0.09%)</title><rect x="170.3" y="261" width="3.1" height="15.0" fill="rgb(168,168,255)" rx="2" ry="2" />
+<text  x="173.30" y="271.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (81,923,149 samples, 0.27%; 0.00%)</title><rect x="396.5" y="181" width="4.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="191.5" ></text>
+</g>
+<g >
+<title>De.write_2852 (184,907,717 samples, 0.62%; -0.13%)</title><rect x="1285.7" y="181" width="9.7" height="15.0" fill="rgb(150,150,255)" rx="2" ry="2" />
+<text  x="1288.65" y="191.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (38,261,307 samples, 0.13%; 0.00%)</title><rect x="428.9" y="229" width="2.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.94" y="239.5" ></text>
+</g>
+<g >
+<title>De.enough_3711 (23,595,236 samples, 0.08%; -0.00%)</title><rect x="964.6" y="165" width="1.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="967.58" y="175.5" ></text>
+</g>
+<g >
+<title>De.emit_2892 (35,516,172 samples, 0.12%; +0.04%)</title><rect x="1290.2" y="165" width="1.9" height="15.0" fill="rgb(255,191,191)" rx="2" ry="2" />
+<text  x="1293.22" y="175.5" ></text>
+</g>
+<g >
+<title>De.bl_tree_2652 (236,329,018 samples, 0.79%; +0.01%)</title><rect x="1295.4" y="149" width="12.6" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1298.45" y="159.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (11,878,628 samples, 0.04%; +0.03%)</title><rect x="429.7" y="149" width="0.6" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="432.71" y="159.5" ></text>
+</g>
+<g >
+<title>Stdlib.Char.chr_276 (3,954,149 samples, 0.01%; +0.01%)</title><rect x="1346.3" y="165" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1349.30" y="175.5" ></text>
+</g>
+<g >
+<title>caml_sweep (3,935,963 samples, 0.01%; +0.01%)</title><rect x="218.7" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="221.71" y="271.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (11,892,374 samples, 0.04%; +0.03%)</title><rect x="428.3" y="245" width="0.6" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="431.31" y="255.5" ></text>
+</g>
+<g >
+<title>bigstringaf_blit_to_bytes (23,562,526 samples, 0.08%; 0.00%)</title><rect x="11.3" y="261" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="14.25" y="271.5" ></text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (63,643,296 samples, 0.21%; -0.03%)</title><rect x="1314.6" y="117" width="3.4" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="1317.61" y="127.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heaps_once (102,451,675 samples, 0.34%; 0.00%)</title><rect x="422.0" y="213" width="5.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="223.5" ></text>
+</g>
+<g >
+<title>caml_c_call (47,332,970 samples, 0.16%; +0.08%)</title><rect x="1132.7" y="133" width="2.5" height="15.0" fill="rgb(255,174,174)" rx="2" ry="2" />
+<text  x="1135.73" y="143.5" ></text>
+</g>
+<g >
+<title>De.fill_window_3710 (3,600,236,102 samples, 12.07%; 0.00%)</title><rect x="944.5" y="181" width="190.7" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="947.51" y="191.5" >De.fill_window_3710</text>
+</g>
+<g >
+<title>De.slow_blit2_1038 (86,564,236 samples, 0.29%; +0.03%)</title><rect x="1581.0" y="117" width="4.6" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1584.03" y="127.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (7,845,048 samples, 0.03%; +0.01%)</title><rect x="1361.5" y="117" width="0.5" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1364.54" y="127.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (3,933,897 samples, 0.01%; +0.01%)</title><rect x="255.5" y="117" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="258.48" y="127.5" ></text>
+</g>
+<g >
+<title>De.decode_1820 (4,549,400,336 samples, 15.25%; +0.01%)</title><rect x="1348.6" y="197" width="241.0" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1351.57" y="207.5" >De.decode_1820</text>
+</g>
+<g >
+<title>caml_darken (19,780,145 samples, 0.07%; -0.01%)</title><rect x="431.2" y="277" width="1.0" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="434.17" y="287.5" ></text>
+</g>
+<g >
+<title>caml_start_program (21,813,970,514 samples, 73.14%; 0.00%)</title><rect x="434.2" y="277" width="1155.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.17" y="287.5" >caml_start_program</text>
+</g>
+<g >
+<title>Stdlib.Domain.get_686 (19,160,910 samples, 0.06%; +0.03%)</title><rect x="1346.7" y="181" width="1.0" height="15.0" fill="rgb(255,196,196)" rx="2" ry="2" />
+<text  x="1349.67" y="191.5" ></text>
+</g>
+<g >
+<title>De.scan_2310 (19,788,566 samples, 0.07%; -0.13%)</title><rect x="1306.9" y="133" width="1.1" height="15.0" fill="rgb(150,150,255)" rx="2" ry="2" />
+<text  x="1309.92" y="143.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (118,238,144 samples, 0.40%; 0.00%)</title><rect x="422.0" y="229" width="6.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="239.5" ></text>
+</g>
+<g >
+<title>De.emit_2892 (74,223,518 samples, 0.25%; -0.04%)</title><rect x="34.6" y="277" width="4.0" height="15.0" fill="rgb(190,190,255)" rx="2" ry="2" />
+<text  x="37.63" y="287.5" ></text>
+</g>
+<g >
+<title>cfree@GLIBC_2.2.5 (3,953,430 samples, 0.01%; +0.01%)</title><rect x="427.9" y="165" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="430.89" y="175.5" ></text>
+</g>
+<g >
+<title>De.t_fill_1581 (3,956,309 samples, 0.01%; 0.00%)</title><rect x="1356.5" y="181" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1359.53" y="191.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (19,791,094 samples, 0.07%; -0.05%)</title><rect x="130.3" y="245" width="1.0" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="133.26" y="255.5" ></text>
+</g>
+<g >
+<title>De.deflate_fast_3712 (256,175,081 samples, 0.86%; -0.18%)</title><rect x="21.1" y="277" width="13.5" height="15.0" fill="rgb(130,130,255)" rx="2" ry="2" />
+<text  x="24.06" y="287.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (7,932,445 samples, 0.03%; +0.01%)</title><rect x="1361.1" y="101" width="0.4" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1364.12" y="111.5" ></text>
+</g>
+<g >
+<title>De.pqremove_2237 (23,538,465 samples, 0.08%; 0.00%)</title><rect x="1299.0" y="101" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1302.00" y="111.5" ></text>
+</g>
+<g >
+<title>De.aux_1442 (23,680,215 samples, 0.08%; +0.01%)</title><rect x="1360.3" y="133" width="1.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1363.29" y="143.5" ></text>
+</g>
+<g >
+<title>caml_ba_offset (11,845,632 samples, 0.04%; +0.04%)</title><rect x="217.7" y="261" width="0.6" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="220.65" y="271.5" ></text>
+</g>
+<g >
+<title>De.reverse_code_2244 (35,391,529 samples, 0.12%; +0.07%)</title><rect x="1309.8" y="117" width="1.9" height="15.0" fill="rgb(255,180,180)" rx="2" ry="2" />
+<text  x="1312.80" y="127.5" ></text>
+</g>
+<g >
+<title>De.generate_lengths_2262 (27,580,677 samples, 0.09%; -0.00%)</title><rect x="1311.7" y="133" width="1.4" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1314.68" y="143.5" ></text>
+</g>
+<g >
+<title>De.emit_literal_3695 (67,031,261 samples, 0.22%; +0.01%)</title><rect x="948.3" y="149" width="3.5" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="951.27" y="159.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (146,077,631 samples, 0.49%; -0.01%)</title><rect x="1549.0" y="69" width="7.8" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1552.05" y="79.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (11,778,534 samples, 0.04%; +0.01%)</title><rect x="1425.5" y="85" width="0.6" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1428.53" y="95.5" ></text>
+</g>
+<g >
+<title>De.add_1387 (66,987,924 samples, 0.22%; -0.00%)</title><rect x="12.5" y="277" width="3.6" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="15.50" y="287.5" ></text>
+</g>
+<g >
+<title>caml_int32_bswap (3,966,834 samples, 0.01%; 0.00%)</title><rect x="361.2" y="261" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="364.25" y="271.5" ></text>
+</g>
+<g >
+<title>De.emit_literal_3695 (1,150,701,387 samples, 3.86%; +0.01%)</title><rect x="527.2" y="165" width="60.9" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="530.15" y="175.5" >De.emi..</text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (15,783,063 samples, 0.05%; +0.03%)</title><rect x="148.8" y="261" width="0.8" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="151.80" y="271.5" ></text>
+</g>
+<g >
+<title>De.longest_match_3618 (189,414,347 samples, 0.64%; +0.05%)</title><rect x="80.5" y="277" width="10.1" height="15.0" fill="rgb(255,186,186)" rx="2" ry="2" />
+<text  x="83.54" y="287.5" ></text>
+</g>
+<g >
+<title>De.make_inner_5452 (212,585,419 samples, 0.71%; -0.01%)</title><rect x="1295.7" y="133" width="11.2" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="1298.66" y="143.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1372 (118,306,273 samples, 0.40%; -0.17%)</title><rect x="1106.8" y="117" width="6.3" height="15.0" fill="rgb(131,131,255)" rx="2" ry="2" />
+<text  x="1109.81" y="127.5" ></text>
+</g>
+<g >
+<title>De.code_2423 (315,096,543 samples, 1.06%; +0.01%)</title><rect x="1205.3" y="165" width="16.6" height="15.0" fill="rgb(255,205,205)" rx="2" ry="2" />
+<text  x="1208.25" y="175.5" ></text>
+</g>
+<g >
+<title>Stdlib.Bytes.blit_382 (19,791,094 samples, 0.07%; 0.00%)</title><rect x="130.3" y="277" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="133.26" y="287.5" ></text>
+</g>
+<g >
+<title>stw_cycle_all_domains (7,832,556 samples, 0.03%; 0.00%)</title><rect x="255.3" y="165" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="175.5" ></text>
+</g>
+<g >
+<title>De.emit_match_3687 (51,455,926 samples, 0.17%; +0.05%)</title><rect x="69.1" y="277" width="2.7" height="15.0" fill="rgb(255,185,185)" rx="2" ry="2" />
+<text  x="72.05" y="287.5" ></text>
+</g>
+<g >
+<title>De.slow_blit2_1038 (3,924,622 samples, 0.01%; -0.00%)</title><rect x="1356.3" y="149" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1359.32" y="159.5" ></text>
+</g>
+<g >
+<title>caml_process_pending_actions (482,030,522 samples, 1.62%; 0.00%)</title><rect x="396.5" y="245" width="25.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="255.5" >c..</text>
+</g>
+<g >
+<title>caml_process_pending_actions (38,261,307 samples, 0.13%; 0.00%)</title><rect x="428.9" y="261" width="2.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.94" y="271.5" ></text>
+</g>
+<g >
+<title>caml_fresh_oo_id (7,926,759 samples, 0.03%; -0.01%)</title><rect x="432.2" y="277" width="0.4" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="435.22" y="287.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (201,340,696 samples, 0.68%; +0.14%)</title><rect x="176.3" y="261" width="10.6" height="15.0" fill="rgb(255,144,144)" rx="2" ry="2" />
+<text  x="179.28" y="271.5" ></text>
+</g>
+<g >
+<title>De.add_1387 (39,622,057 samples, 0.13%; -0.00%)</title><rect x="1353.6" y="165" width="2.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1356.59" y="175.5" ></text>
+</g>
+<g >
+<title>De.succ_literal_3692 (74,541,704 samples, 0.25%; -0.00%)</title><rect x="155.7" y="261" width="3.9" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="158.69" y="271.5" ></text>
+</g>
+<g >
+<title>De.inflate_1671 (78,889,017 samples, 0.26%; +0.12%)</title><rect x="139.0" y="261" width="4.1" height="15.0" fill="rgb(255,156,156)" rx="2" ry="2" />
+<text  x="141.96" y="271.5" ></text>
+</g>
+<g >
+<title>De.write_2852 (406,514,476 samples, 1.36%; -0.17%)</title><rect x="98.9" y="277" width="21.5" height="15.0" fill="rgb(134,134,255)" rx="2" ry="2" />
+<text  x="101.90" y="287.5" >D..</text>
+</g>
+<g >
+<title>caml_memprof_sample_block (3,959,291 samples, 0.01%; +0.00%)</title><rect x="432.7" y="277" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="435.70" y="287.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (7,917,020 samples, 0.03%; +0.03%)</title><rect x="154.0" y="261" width="0.4" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="157.01" y="271.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (7,926,284 samples, 0.03%; +0.03%)</title><rect x="433.7" y="277" width="0.5" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="436.75" y="287.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (59,344,403 samples, 0.20%; +0.03%)</title><rect x="1420.1" y="69" width="3.1" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="1423.08" y="79.5" ></text>
+</g>
+<g >
+<title>De.succ_distance_3684 (11,856,610 samples, 0.04%; +0.03%)</title><rect x="154.8" y="261" width="0.7" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="157.85" y="271.5" ></text>
+</g>
+<g >
+<title>caml_program (21,813,970,514 samples, 73.14%; 0.00%)</title><rect x="434.2" y="261" width="1155.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.17" y="271.5" >caml_program</text>
+</g>
+<g >
+<title>De.emit_match_3687 (189,627,501 samples, 0.64%; +0.05%)</title><rect x="588.1" y="165" width="10.1" height="15.0" fill="rgb(255,186,186)" rx="2" ry="2" />
+<text  x="591.11" y="175.5" ></text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (94,568,453 samples, 0.32%; +0.05%)</title><rect x="1318.6" y="101" width="5.0" height="15.0" fill="rgb(255,186,186)" rx="2" ry="2" />
+<text  x="1321.60" y="111.5" ></text>
+</g>
+<g >
+<title>caml_c_call (236,846,626 samples, 0.79%; -0.05%)</title><rect x="1113.1" y="117" width="12.5" height="15.0" fill="rgb(186,186,255)" rx="2" ry="2" />
+<text  x="1116.07" y="127.5" ></text>
+</g>
+<g >
+<title>De.l_header_1815 (3,960,292 samples, 0.01%; 0.00%)</title><rect x="80.3" y="277" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="83.33" y="287.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (66,944,644 samples, 0.22%; -0.01%)</title><rect x="392.8" y="213" width="3.6" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="395.81" y="223.5" ></text>
+</g>
+<g >
+<title>De.loop_1448 (962,892,120 samples, 3.23%; +0.04%)</title><rect x="1367.8" y="101" width="51.0" height="15.0" fill="rgb(255,193,193)" rx="2" ry="2" />
+<text  x="1370.81" y="111.5" >De.lo..</text>
+</g>
+<g >
+<title>De.remove_1332 (31,587,416 samples, 0.11%; +0.03%)</title><rect x="1421.5" y="53" width="1.7" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1424.55" y="63.5" ></text>
+</g>
+<g >
+<title>De.loop_1448 (3,971,198 samples, 0.01%; +0.01%)</title><rect x="1360.7" y="117" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1363.70" y="127.5" ></text>
+</g>
+<g >
+<title>[unknown] (1,626,892,106 samples, 5.45%; -0.01%)</title><rect x="132.9" y="277" width="86.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="135.94" y="287.5" >[unknown]</text>
+</g>
+<g >
+<title>caml_do_roots (3,842,709 samples, 0.01%; -0.01%)</title><rect x="396.5" y="133" width="0.2" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="399.51" y="143.5" ></text>
+</g>
+<g >
+<title>unlink_chunk.isra.0 (3,943,388 samples, 0.01%; +0.01%)</title><rect x="427.7" y="133" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="430.68" y="143.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (102,451,675 samples, 0.34%; 0.00%)</title><rect x="422.0" y="197" width="5.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="207.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (23,677,607 samples, 0.08%; -0.08%)</title><rect x="10.0" y="245" width="1.3" height="15.0" fill="rgb(174,174,255)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (2,925,920 samples, 0.01%; 0.00%)</title><rect x="396.4" y="181" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.35" y="191.5" ></text>
+</g>
+<g >
+<title>caml_c_call (43,377,609 samples, 0.15%; -0.08%)</title><rect x="1573.1" y="85" width="2.3" height="15.0" fill="rgb(173,173,255)" rx="2" ry="2" />
+<text  x="1576.08" y="95.5" ></text>
+</g>
+<g >
+<title>caml_c_call (12,069,389 samples, 0.04%; +0.01%)</title><rect x="1354.8" y="101" width="0.7" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1357.85" y="111.5" ></text>
+</g>
+<g >
+<title>Stdlib.Char.chr_276 (3,908,579 samples, 0.01%; +0.01%)</title><rect x="1221.7" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1224.74" y="159.5" ></text>
+</g>
+<g >
+<title>De.deflate_3720 (3,908,038 samples, 0.01%; +0.01%)</title><rect x="944.5" y="165" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="947.51" y="175.5" ></text>
+</g>
+<g >
+<title>De.code_2423 (15,853,108 samples, 0.05%; +0.03%)</title><rect x="1344.8" y="165" width="0.9" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="1347.83" y="175.5" ></text>
+</g>
+<g >
+<title>caml_c_call (201,020,110 samples, 0.67%; +0.00%)</title><rect x="1556.8" y="69" width="10.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1559.79" y="79.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (7,845,048 samples, 0.03%; 0.00%)</title><rect x="1361.5" y="149" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1364.54" y="159.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heaps_once (81,923,149 samples, 0.27%; 0.00%)</title><rect x="396.5" y="197" width="4.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="207.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small (2,925,920 samples, 0.01%; -0.01%)</title><rect x="396.4" y="245" width="0.1" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="399.35" y="255.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (3,943,388 samples, 0.01%; -0.01%)</title><rect x="427.7" y="165" width="0.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="430.68" y="175.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (7,832,556 samples, 0.03%; 0.00%)</title><rect x="255.3" y="181" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="191.5" ></text>
+</g>
+<g >
+<title>caml_uniform_array_make (1,139,193,511 samples, 3.82%; -0.38%)</title><rect x="361.7" y="261" width="60.3" height="15.0" fill="rgb(36,36,255)" rx="2" ry="2" />
+<text  x="364.69" y="271.5" >caml_u..</text>
+</g>
+<g >
+<title>caml_scan_stack (3,969,373 samples, 0.01%; 0.00%)</title><rect x="400.2" y="149" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="403.22" y="159.5" ></text>
+</g>
+<g >
+<title>caml_check_urgent_gc (23,575,041 samples, 0.08%; 0.00%)</title><rect x="255.3" y="245" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="255.5" ></text>
+</g>
+<g >
+<title>De.prefix_1434 (1,081,450,102 samples, 3.63%; +0.01%)</title><rect x="1365.9" y="133" width="57.3" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1368.93" y="143.5" >De.pre..</text>
+</g>
+<g >
+<title>caml_shared_try_alloc (3,905,083 samples, 0.01%; +0.01%)</title><rect x="427.3" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="430.27" y="159.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (3,874,409 samples, 0.01%; -0.01%)</title><rect x="1355.5" y="117" width="0.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1358.49" y="127.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,933,897 samples, 0.01%; 0.00%)</title><rect x="255.5" y="133" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.48" y="143.5" ></text>
+</g>
+<g >
+<title>caml_darken (35,548,573 samples, 0.12%; -0.01%)</title><rect x="424.3" y="133" width="1.9" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="427.33" y="143.5" ></text>
+</g>
+<g >
+<title>caml_sweep (11,820,296 samples, 0.04%; -0.03%)</title><rect x="427.5" y="181" width="0.6" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="430.47" y="191.5" ></text>
+</g>
+<g >
+<title>De.c_bits_2739 (23,654,940 samples, 0.08%; +0.01%)</title><rect x="1282.5" y="181" width="1.3" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1285.52" y="191.5" ></text>
+</g>
+<g >
+<title>De.longest_match_3618 (103,006,402 samples, 0.35%; +0.12%)</title><rect x="143.1" y="261" width="5.5" height="15.0" fill="rgb(255,155,155)" rx="2" ry="2" />
+<text  x="146.14" y="271.5" ></text>
+</g>
+<g >
+<title>Stdlib.Random.int_1176 (19,160,910 samples, 0.06%; -0.00%)</title><rect x="1346.7" y="197" width="1.0" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1349.67" y="207.5" ></text>
+</g>
+<g >
+<title>Stdlib.Char.chr_276 (43,284,964 samples, 0.15%; -0.04%)</title><rect x="1280.2" y="165" width="2.3" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="1283.23" y="175.5" ></text>
+</g>
+<g >
+<title>De.slide_hash_3703 (2,197,577,113 samples, 7.37%; +0.27%)</title><rect x="982.9" y="165" width="116.4" height="15.0" fill="rgb(255,89,89)" rx="2" ry="2" />
+<text  x="985.85" y="175.5" >De.slide_hash_..</text>
+</g>
+<g >
+<title>De.symbols_2331 (7,861,502 samples, 0.03%; -0.05%)</title><rect x="98.1" y="277" width="0.4" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="101.06" y="287.5" ></text>
+</g>
+<g >
+<title>De.code_2423 (39,624,454 samples, 0.13%; -0.01%)</title><rect x="1219.6" y="149" width="2.1" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1222.64" y="159.5" ></text>
+</g>
+<g >
+<title>De.c_peek_bits_1571 (15,831,184 samples, 0.05%; +0.04%)</title><rect x="1357.2" y="165" width="0.8" height="15.0" fill="rgb(255,191,191)" rx="2" ry="2" />
+<text  x="1360.15" y="175.5" ></text>
+</g>
+<g >
+<title>caml_darken (54,362,229 samples, 0.18%; +0.10%)</title><rect x="397.3" y="117" width="2.9" height="15.0" fill="rgb(255,163,163)" rx="2" ry="2" />
+<text  x="400.34" y="127.5" ></text>
+</g>
+<g >
+<title>De.blit_1401 (15,755,035 samples, 0.05%; +0.04%)</title><rect x="1355.7" y="165" width="0.8" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="1358.69" y="175.5" ></text>
+</g>
+<g >
+<title>De.fun_5468 (3,953,385 samples, 0.01%; -0.01%)</title><rect x="138.7" y="261" width="0.3" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="141.75" y="271.5" ></text>
+</g>
+<g >
+<title>De.get_1736 (3,894,502 samples, 0.01%; -0.01%)</title><rect x="1358.6" y="165" width="0.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1361.62" y="175.5" ></text>
+</g>
+<g >
+<title>De.push_exn_2384 (27,573,929 samples, 0.09%; -0.04%)</title><rect x="591.2" y="149" width="1.5" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="594.24" y="159.5" ></text>
+</g>
+<g >
+<title>De.cmd_2417 (19,669,856 samples, 0.07%; -0.04%)</title><rect x="590.2" y="149" width="1.0" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="593.20" y="159.5" ></text>
+</g>
+<g >
+<title>De.c_peek_bits_1571 (3,967,784 samples, 0.01%; +0.01%)</title><rect x="1348.8" y="181" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1351.78" y="191.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (15,786,469 samples, 0.05%; 0.00%)</title><rect x="427.5" y="213" width="0.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="430.47" y="223.5" ></text>
+</g>
+<g >
+<title>De.push_exn_2384 (540,171,409 samples, 1.81%; +0.25%)</title><rect x="556.2" y="149" width="28.6" height="15.0" fill="rgb(255,97,97)" rx="2" ry="2" />
+<text  x="559.16" y="159.5" >De..</text>
+</g>
+<g >
+<title>pthread_mutex_trylock@@GLIBC_2.34 (3,953,047 samples, 0.01%; +0.01%)</title><rect x="401.7" y="149" width="0.2" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="404.68" y="159.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (23,562,526 samples, 0.08%; -0.01%)</title><rect x="11.3" y="245" width="1.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="14.25" y="255.5" ></text>
+</g>
+<g >
+<title>De.take_1342 (7,880,613 samples, 0.03%; +0.03%)</title><rect x="98.5" y="277" width="0.4" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="101.48" y="287.5" ></text>
+</g>
+<g >
+<title>De.succ_length_3681 (3,960,534 samples, 0.01%; -0.04%)</title><rect x="155.5" y="261" width="0.2" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="158.48" y="271.5" ></text>
+</g>
+<g >
+<title>pool_sweep (3,901,626 samples, 0.01%; +0.01%)</title><rect x="401.5" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="404.48" y="159.5" ></text>
+</g>
+<g >
+<title>Bigstringaf.blit_from_string_738 (23,677,607 samples, 0.08%; 0.00%)</title><rect x="10.0" y="277" width="1.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" ></text>
+</g>
+<g >
+<title>mark (3,905,423 samples, 0.01%; +0.01%)</title><rect x="132.7" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="135.73" y="271.5" ></text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (18,854,589 samples, 0.06%; -0.06%)</title><rect x="95.0" y="277" width="1.0" height="15.0" fill="rgb(184,184,255)" rx="2" ry="2" />
+<text  x="97.97" y="287.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.digest_675 (27,813,539 samples, 0.09%; -0.01%)</title><rect x="1354.2" y="133" width="1.5" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="1357.22" y="143.5" ></text>
+</g>
+<g >
+<title>De.update_1383 (603,812,740 samples, 2.02%; 0.00%)</title><rect x="1543.4" y="117" width="32.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1546.39" y="127.5" >De..</text>
+</g>
+<g >
+<title>De.make_inner_5452 (620,801,598 samples, 2.08%; +0.02%)</title><rect x="1308.0" y="149" width="32.9" height="15.0" fill="rgb(255,199,199)" rx="2" ry="2" />
+<text  x="1310.97" y="159.5" >De..</text>
+</g>
+<g >
+<title>major_collection_slice (400,107,373 samples, 1.34%; +0.01%)</title><rect x="400.8" y="181" width="21.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="403.85" y="191.5" ></text>
+</g>
+<g >
+<title>caml_ba_offset (645,395,169 samples, 2.16%; +0.14%)</title><rect x="327.1" y="229" width="34.1" height="15.0" fill="rgb(255,145,145)" rx="2" ry="2" />
+<text  x="330.06" y="239.5" >ca..</text>
+</g>
+<g >
+<title>De.make_inner_5452 (3,961,996 samples, 0.01%; +0.01%)</title><rect x="148.6" y="261" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="151.59" y="271.5" ></text>
+</g>
+<g >
+<title>caml_memprof_sample_block (3,955,432 samples, 0.01%; -0.00%)</title><rect x="392.4" y="229" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="395.39" y="239.5" ></text>
+</g>
+<g >
+<title>De.insert_string_3675 (102,367,317 samples, 0.34%; +0.03%)</title><rect x="74.7" y="277" width="5.4" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="77.70" y="287.5" ></text>
+</g>
+<g >
+<title>De.go_2300 (197,695,469 samples, 0.66%; -0.08%)</title><rect x="1313.1" y="133" width="10.5" height="15.0" fill="rgb(174,174,255)" rx="2" ry="2" />
+<text  x="1316.14" y="143.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (3,966,834 samples, 0.01%; 0.00%)</title><rect x="361.2" y="245" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="364.25" y="255.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_N (74,451,631 samples, 0.25%; -0.15%)</title><rect x="225.9" y="277" width="3.9" height="15.0" fill="rgb(142,142,255)" rx="2" ry="2" />
+<text  x="228.88" y="287.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (347,097,741 samples, 1.16%; 0.00%)</title><rect x="1549.0" y="85" width="18.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.05" y="95.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (3,954,588 samples, 0.01%; +0.01%)</title><rect x="426.4" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="429.43" y="159.5" ></text>
+</g>
+<g >
+<title>De.populate_2204 (39,385,617 samples, 0.13%; -0.00%)</title><rect x="1323.6" y="133" width="2.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1326.61" y="143.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,905,083 samples, 0.01%; 0.00%)</title><rect x="427.3" y="165" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="430.27" y="175.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small_dispatch (118,238,144 samples, 0.40%; 0.00%)</title><rect x="422.0" y="261" width="6.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="271.5" ></text>
+</g>
+<g >
+<title>caml_lf_skiplist_free_garbage (3,966,301 samples, 0.01%; +0.01%)</title><rect x="401.9" y="117" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="404.89" y="127.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (11,879,098 samples, 0.04%; +0.01%)</title><rect x="426.2" y="165" width="0.6" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="429.22" y="175.5" ></text>
+</g>
+<g >
+<title>De.emit_literal_3695 (575,480,583 samples, 1.93%; +0.16%)</title><rect x="38.6" y="277" width="30.5" height="15.0" fill="rgb(255,139,139)" rx="2" ry="2" />
+<text  x="41.57" y="287.5" >De..</text>
+</g>
+<g >
+<title>Zl.encode_deflate_1707 (1,152,566,854 samples, 3.86%; 0.00%)</title><rect x="1282.5" y="197" width="61.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1285.52" y="207.5" >Zl.enc..</text>
+</g>
+<g >
+<title>Gin_adler32.digest_675 (603,812,740 samples, 2.02%; -0.04%)</title><rect x="1543.4" y="101" width="32.0" height="15.0" fill="rgb(192,192,255)" rx="2" ry="2" />
+<text  x="1546.39" y="111.5" >Gi..</text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (26,466,889 samples, 0.09%; +0.05%)</title><rect x="1325.7" y="133" width="1.4" height="15.0" fill="rgb(255,187,187)" rx="2" ry="2" />
+<text  x="1328.70" y="143.5" ></text>
+</g>
+<g >
+<title>De.emit_2892 (386,818,114 samples, 1.30%; -0.16%)</title><rect x="1221.9" y="165" width="20.5" height="15.0" fill="rgb(139,139,255)" rx="2" ry="2" />
+<text  x="1224.95" y="175.5" ></text>
+</g>
+<g >
+<title>De.refill_1565 (3,937,064 samples, 0.01%; 0.00%)</title><rect x="96.4" y="277" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="99.39" y="287.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,963,241 samples, 0.01%; +0.01%)</title><rect x="427.1" y="149" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="430.06" y="159.5" ></text>
+</g>
+<g >
+<title>De.table_1779 (4,395,316,591 samples, 14.74%; -0.00%)</title><rect x="1356.7" y="181" width="232.9" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1359.73" y="191.5" >De.table_1779</text>
+</g>
+<g >
+<title>caml_poll_gc_work (23,575,041 samples, 0.08%; 0.00%)</title><rect x="255.3" y="229" width="1.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="239.5" ></text>
+</g>
+<g >
+<title>caml_code_fragment_cleanup_from_stw_single (3,966,301 samples, 0.01%; 0.00%)</title><rect x="401.9" y="133" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="404.89" y="143.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1372 (43,297,507 samples, 0.15%; -0.08%)</title><rect x="173.4" y="261" width="2.3" height="15.0" fill="rgb(173,173,255)" rx="2" ry="2" />
+<text  x="176.44" y="271.5" ></text>
+</g>
+<g >
+<title>caml_do_pending_actions_res (38,261,307 samples, 0.13%; 0.00%)</title><rect x="428.9" y="245" width="2.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.94" y="255.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.digest_675 (201,245,340 samples, 0.67%; +0.17%)</title><rect x="159.6" y="261" width="10.7" height="15.0" fill="rgb(255,132,132)" rx="2" ry="2" />
+<text  x="162.64" y="271.5" ></text>
+</g>
+<g >
+<title>oldify_mopup (3,898,659 samples, 0.01%; 0.00%)</title><rect x="255.3" y="133" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="143.5" ></text>
+</g>
+<g >
+<title>caml_uniform_array_fill (3,967,187 samples, 0.01%; +0.00%)</title><rect x="361.5" y="261" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="364.48" y="271.5" ></text>
+</g>
+<g >
+<title>De.deflate_fast_3712 (9,329,284,033 samples, 31.28%; -0.08%)</title><rect x="434.4" y="181" width="494.2" height="15.0" fill="rgb(175,175,255)" rx="2" ry="2" />
+<text  x="437.38" y="191.5" >De.deflate_fast_3712</text>
+</g>
+<g >
+<title>De.symbols_2331 (51,433,670 samples, 0.17%; -0.08%)</title><rect x="1340.9" y="149" width="2.7" height="15.0" fill="rgb(174,174,255)" rx="2" ry="2" />
+<text  x="1343.85" y="159.5" ></text>
+</g>
+<g >
+<title>De.peek_exn_2399 (23,573,766 samples, 0.08%; +0.03%)</title><rect x="1293.8" y="165" width="1.2" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="1296.78" y="175.5" ></text>
+</g>
+<g >
+<title>De.go_2300 (62,987,742 samples, 0.21%; +0.01%)</title><rect x="1296.9" y="117" width="3.3" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1299.91" y="127.5" ></text>
+</g>
+<g >
+<title>caml_mark_roots_stw (70,084,761 samples, 0.23%; 0.00%)</title><rect x="396.5" y="149" width="3.7" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="159.5" ></text>
+</g>
+<g >
+<title>validated_config (3,941,609 samples, 0.01%; +0.01%)</title><rect x="218.9" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="221.92" y="271.5" ></text>
+</g>
+<g >
+<title>Stdlib.Array.map2_371 (259,569,589 samples, 0.87%; -0.08%)</title><rect x="1327.1" y="133" width="13.8" height="15.0" fill="rgb(171,171,255)" rx="2" ry="2" />
+<text  x="1330.10" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Domain.maybe_grow_580 (5,676,383 samples, 0.02%; +0.01%)</title><rect x="1347.4" y="165" width="0.3" height="15.0" fill="rgb(255,206,206)" rx="2" ry="2" />
+<text  x="1350.39" y="175.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (3,922,126 samples, 0.01%; -0.01%)</title><rect x="1423.0" y="37" width="0.2" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1426.01" y="47.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (71,213,683 samples, 0.24%; -0.04%)</title><rect x="1419.4" y="85" width="3.8" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="1422.45" y="95.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Test_decompress.compress_800 (17,221,699,392 samples, 57.74%; 0.00%)</title><rect x="434.2" y="229" width="912.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="437.17" y="239.5" >Dune.exe.Test_decompress.compress_800</text>
+</g>
+<g >
+<title>De.generate_codes_2251 (15,711,275 samples, 0.05%; +0.00%)</title><rect x="1295.7" y="117" width="0.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1298.66" y="127.5" ></text>
+</g>
+<g >
+<title>De.push_exn_2384 (31,642,758 samples, 0.11%; -0.01%)</title><rect x="950.1" y="133" width="1.7" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="953.14" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Array.map2_371 (153,803,729 samples, 0.52%; +0.06%)</title><rect x="122.1" y="277" width="8.2" height="15.0" fill="rgb(255,181,181)" rx="2" ry="2" />
+<text  x="125.11" y="287.5" ></text>
+</g>
+<g >
+<title>De.pqdownheap_2227 (31,594,406 samples, 0.11%; +0.03%)</title><rect x="1297.3" y="101" width="1.7" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="1300.32" y="111.5" ></text>
+</g>
+<g >
+<title>caml_modify (3,960,292 samples, 0.01%; +0.01%)</title><rect x="80.3" y="261" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="83.33" y="271.5" ></text>
+</g>
+<g >
+<title>De.emit_2892 (11,900,546 samples, 0.04%; +0.04%)</title><rect x="1345.7" y="165" width="0.6" height="15.0" fill="rgb(255,191,191)" rx="2" ry="2" />
+<text  x="1348.67" y="175.5" ></text>
+</g>
+<g >
+<title>_int_malloc (63,020,037 samples, 0.21%; +0.02%)</title><rect x="393.0" y="197" width="3.4" height="15.0" fill="rgb(255,202,202)" rx="2" ry="2" />
+<text  x="396.01" y="207.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,958,100 samples, 0.01%; +0.01%)</title><rect x="426.6" y="149" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="429.64" y="159.5" ></text>
+</g>
+<g >
+<title>De.decoder_1831 (3,944,098 samples, 0.01%; +0.01%)</title><rect x="1589.6" y="197" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1592.58" y="207.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (38,261,307 samples, 0.13%; 0.00%)</title><rect x="428.9" y="213" width="2.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.94" y="223.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (7,919,348 samples, 0.03%; 0.00%)</title><rect x="401.7" y="165" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="404.68" y="175.5" ></text>
+</g>
+<g >
+<title>caml_garbage_collection (11,892,374 samples, 0.04%; 0.00%)</title><rect x="428.3" y="261" width="0.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.31" y="271.5" ></text>
+</g>
+<g >
+<title>caml_c_call (3,517,991,857 samples, 11.80%; +0.13%)</title><rect x="235.7" y="277" width="186.3" height="15.0" fill="rgb(255,152,152)" rx="2" ry="2" />
+<text  x="238.67" y="287.5" >caml_c_call</text>
+</g>
+<g >
+<title>De.peek_exn_2399 (272,074,251 samples, 0.91%; -0.14%)</title><rect x="1265.8" y="165" width="14.4" height="15.0" fill="rgb(148,148,255)" rx="2" ry="2" />
+<text  x="1268.81" y="175.5" ></text>
+</g>
+<g >
+<title>caml_modify (3,937,064 samples, 0.01%; +0.01%)</title><rect x="96.4" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="99.39" y="271.5" ></text>
+</g>
+<g >
+<title>De.generate_lengths_2262 (7,931,680 samples, 0.03%; +0.01%)</title><rect x="1296.5" y="117" width="0.4" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1299.49" y="127.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (3,943,388 samples, 0.01%; 0.00%)</title><rect x="427.7" y="149" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="430.68" y="159.5" ></text>
+</g>
+<g >
+<title>caml_blit_bytes (19,791,094 samples, 0.07%; 0.00%)</title><rect x="130.3" y="261" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="133.26" y="271.5" ></text>
+</g>
+<g >
+<title>De.k_1744 (3,971,282 samples, 0.01%; +0.01%)</title><rect x="1362.0" y="165" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1364.96" y="175.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (2,925,920 samples, 0.01%; 0.00%)</title><rect x="396.4" y="197" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.35" y="207.5" ></text>
+</g>
+<g >
+<title>Zl.go_1804 (4,561,255,943 samples, 15.29%; 0.00%)</title><rect x="1348.2" y="229" width="241.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1351.15" y="239.5" >Zl.go_1804</text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (15,806,423 samples, 0.05%; -0.04%)</title><rect x="120.4" y="277" width="0.9" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="123.43" y="287.5" ></text>
+</g>
+<g >
+<title>De.insert_string_3675 (1,307,862,500 samples, 4.39%; +0.20%)</title><rect x="598.2" y="165" width="69.2" height="15.0" fill="rgb(255,121,121)" rx="2" ry="2" />
+<text  x="601.16" y="175.5" >De.inse..</text>
+</g>
+<g >
+<title>caml_lxm_next_unboxed (4,348,614 samples, 0.01%; +0.01%)</title><rect x="132.5" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="135.50" y="271.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (78,735,623 samples, 0.26%; +0.08%)</title><rect x="422.0" y="149" width="4.2" height="15.0" fill="rgb(255,174,174)" rx="2" ry="2" />
+<text  x="425.04" y="159.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (11,878,628 samples, 0.04%; 0.00%)</title><rect x="429.7" y="165" width="0.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="432.71" y="175.5" ></text>
+</g>
+<g >
+<title>caml_do_pending_actions_res (118,238,144 samples, 0.40%; 0.00%)</title><rect x="422.0" y="245" width="6.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="425.04" y="255.5" ></text>
+</g>
+<g >
+<title>update_major_slice_work (3,966,173 samples, 0.01%; +0.01%)</title><rect x="428.1" y="181" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="431.10" y="191.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Test_decompress.go_424 (7,911,509 samples, 0.03%; -0.01%)</title><rect x="1348.2" y="213" width="0.4" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1351.15" y="223.5" ></text>
+</g>
+<g >
+<title>De.remove_1332 (3,965,129 samples, 0.01%; +0.01%)</title><rect x="1361.3" y="85" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1364.33" y="95.5" ></text>
+</g>
+<g >
+<title>De.have_1398 (3,932,063 samples, 0.01%; -0.00%)</title><rect x="74.5" y="277" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="77.49" y="287.5" ></text>
+</g>
+<g >
+<title>De.reverse_code_2244 (11,765,523 samples, 0.04%; +0.03%)</title><rect x="1295.9" y="101" width="0.6" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1298.86" y="111.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1372 (15,823,923 samples, 0.05%; -0.03%)</title><rect x="121.3" y="277" width="0.8" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="124.27" y="287.5" ></text>
+</g>
+<g >
+<title>De.insert_string_3675 (35,508,580 samples, 0.12%; -0.12%)</title><rect x="951.8" y="149" width="1.9" height="15.0" fill="rgb(156,156,255)" rx="2" ry="2" />
+<text  x="954.82" y="159.5" ></text>
+</g>
+<g >
+<title>Stdlib.Char.chr_276 (2,550,068 samples, 0.01%; +0.00%)</title><rect x="175.8" y="261" width="0.1" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="178.76" y="271.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (3,969,373 samples, 0.01%; +0.01%)</title><rect x="400.2" y="133" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="403.22" y="143.5" ></text>
+</g>
+<g >
+<title>caml_alloc_shr (86,591,107 samples, 0.29%; +0.04%)</title><rect x="391.8" y="245" width="4.6" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="394.77" y="255.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (7,832,556 samples, 0.03%; 0.00%)</title><rect x="255.3" y="149" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="159.5" ></text>
+</g>
+<g >
+<title>oldify_mopup (7,869,015 samples, 0.03%; +0.01%)</title><rect x="400.4" y="149" width="0.4" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="403.43" y="159.5" ></text>
+</g>
+<g >
+<title>De.pqremove_2237 (106,387,456 samples, 0.36%; +0.01%)</title><rect x="1318.0" y="117" width="5.6" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1320.98" y="127.5" ></text>
+</g>
+<g >
+<title>stw_cycle_all_domains (3,966,301 samples, 0.01%; 0.00%)</title><rect x="401.9" y="149" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="404.89" y="159.5" ></text>
+</g>
+<g >
+<title>De.encode_huffman_2777 (3,953,562 samples, 0.01%; +0.01%)</title><rect x="1284.2" y="181" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1287.19" y="191.5" ></text>
+</g>
+<g >
+<title>Stdlib.Domain.get_686 (3,376,198 samples, 0.01%; +0.00%)</title><rect x="175.9" y="261" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="178.90" y="271.5" ></text>
+</g>
+<g >
+<title>De.have_1398 (39,318,359 samples, 0.13%; +0.04%)</title><rect x="1585.6" y="133" width="2.1" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="1588.62" y="143.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (15,786,469 samples, 0.05%; 0.00%)</title><rect x="427.5" y="197" width="0.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="430.47" y="207.5" ></text>
+</g>
+<g >
+<title>De.code_2423 (82,699,915 samples, 0.28%; +0.09%)</title><rect x="16.7" y="277" width="4.4" height="15.0" fill="rgb(255,168,168)" rx="2" ry="2" />
+<text  x="19.68" y="287.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (38,261,307 samples, 0.13%; 0.00%)</title><rect x="428.9" y="197" width="2.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="431.94" y="207.5" ></text>
+</g>
+<g >
+<title>De.generate_codes_2251 (59,093,273 samples, 0.20%; -0.00%)</title><rect x="1308.5" y="133" width="3.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1311.55" y="143.5" ></text>
+</g>
+<g >
+<title>oldify_mopup (7,931,871 samples, 0.03%; -0.01%)</title><rect x="426.8" y="165" width="0.5" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="429.85" y="175.5" ></text>
+</g>
+<g >
+<title>De.succ_length_3681 (23,733,471 samples, 0.08%; -0.05%)</title><rect x="596.9" y="149" width="1.3" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="599.90" y="159.5" ></text>
+</g>
+<g >
+<title>caml_modify (103,476,778 samples, 0.35%; +0.03%)</title><rect x="124.8" y="261" width="5.5" height="15.0" fill="rgb(255,197,197)" rx="2" ry="2" />
+<text  x="127.77" y="271.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_trim (3,891,279 samples, 0.01%; +0.01%)</title><rect x="176.1" y="261" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="179.08" y="271.5" ></text>
+</g>
+<g >
+<title>Stdlib.Random.int_aux_920 (5,822,372 samples, 0.02%; +0.01%)</title><rect x="1347.8" y="197" width="0.4" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="1350.84" y="207.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (8,119,780 samples, 0.03%; -0.01%)</title><rect x="218.3" y="261" width="0.4" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="221.28" y="271.5" ></text>
+</g>
+<g >
+<title>De.update_crc_3671 (678,794,134 samples, 2.28%; 0.00%)</title><rect x="1099.3" y="165" width="35.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1102.27" y="175.5" >De...</text>
+</g>
+<g >
+<title>De.flush_2782 (3,918,943 samples, 0.01%; +0.01%)</title><rect x="1284.4" y="181" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1287.40" y="191.5" ></text>
+</g>
+<g >
+<title>De.populate_2204 (3,950,319 samples, 0.01%; -0.01%)</title><rect x="1300.2" y="117" width="0.3" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="1303.24" y="127.5" ></text>
+</g>
+<g >
+<title>Zl.partial_1705 (55,337,127 samples, 0.19%; 0.00%)</title><rect x="1343.6" y="197" width="2.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1346.58" y="207.5" ></text>
+</g>
+<g >
+<title>De.exists_2685 (441,194,933 samples, 1.48%; +0.31%)</title><rect x="1242.4" y="165" width="23.4" height="15.0" fill="rgb(255,68,68)" rx="2" ry="2" />
+<text  x="1245.44" y="175.5" >D..</text>
+</g>
+<g >
+<title>De.write_2852 (2,780,220,797 samples, 9.32%; +0.08%)</title><rect x="1135.2" y="181" width="147.3" height="15.0" fill="rgb(255,173,173)" rx="2" ry="2" />
+<text  x="1138.23" y="191.5" >De.write_2852</text>
+</g>
+<g >
+<title>De.get_1730 (7,910,838 samples, 0.03%; -0.01%)</title><rect x="1358.2" y="165" width="0.4" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="1361.20" y="175.5" ></text>
+</g>
+<g >
+<title>test_decompress (29,824,598,186 samples, 100.00%; 0.00%)</title><rect x="10.0" y="293" width="1580.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >test_decompress</text>
+</g>
+<g >
+<title>De.make_table_1708 (3,966,336 samples, 0.01%; +0.01%)</title><rect x="90.6" y="277" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="93.58" y="287.5" ></text>
+</g>
+<g >
+<title>De.inflate_1671 (3,049,537,211 samples, 10.22%; +0.27%)</title><rect x="1426.1" y="149" width="161.6" height="15.0" fill="rgb(255,89,89)" rx="2" ry="2" />
+<text  x="1429.15" y="159.5" >De.inflate_1671</text>
+</g>
+<g >
+<title>De.push_1323 (55,311,250 samples, 0.19%; +0.04%)</title><rect x="1423.2" y="133" width="2.9" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="1426.22" y="143.5" ></text>
+</g>
+<g >
+<title>De.succ_distance_3684 (79,239,755 samples, 0.27%; -0.05%)</title><rect x="592.7" y="149" width="4.2" height="15.0" fill="rgb(185,185,255)" rx="2" ry="2" />
+<text  x="595.70" y="159.5" ></text>
+</g>
+<g >
+<title>De.deflate_fast_3712 (375,084,829 samples, 1.26%; -0.03%)</title><rect x="944.7" y="165" width="19.9" height="15.0" fill="rgb(198,198,255)" rx="2" ry="2" />
+<text  x="947.71" y="175.5" ></text>
+</g>
+<g >
+<title>De.blit_1401 (193,317,682 samples, 0.65%; -0.11%)</title><rect x="1575.4" y="133" width="10.2" height="15.0" fill="rgb(161,161,255)" rx="2" ry="2" />
+<text  x="1578.38" y="143.5" ></text>
+</g>
+<g >
+<title>De.fun_5752 (3,929,593 samples, 0.01%; +0.01%)</title><rect x="1284.6" y="181" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1287.61" y="191.5" ></text>
+</g>
+<g >
+<title>De.enough_3711 (300,096,290 samples, 1.01%; -0.20%)</title><rect x="928.6" y="181" width="15.9" height="15.0" fill="rgb(119,119,255)" rx="2" ry="2" />
+<text  x="931.61" y="191.5" ></text>
+</g>
+<g >
+<title>De.go_1752 (11,853,298 samples, 0.04%; +0.03%)</title><rect x="1358.8" y="165" width="0.6" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1361.82" y="175.5" ></text>
+</g>
+<g >
+<title>De.fun_5024 (3,851,931 samples, 0.01%; +0.01%)</title><rect x="74.3" y="277" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="77.29" y="287.5" ></text>
+</g>
+<g >
+<title>De.exists_2685 (47,358,252 samples, 0.16%; -0.03%)</title><rect x="71.8" y="277" width="2.5" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="74.78" y="287.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_1 (1,976,813,946 samples, 6.63%; -0.19%)</title><rect x="256.5" y="261" width="104.7" height="15.0" fill="rgb(126,126,255)" rx="2" ry="2" />
+<text  x="259.52" y="271.5" >caml_ba_get_1</text>
+</g>
+<g >
+<title>caml_shared_try_alloc (70,777,250 samples, 0.24%; -0.00%)</title><rect x="392.6" y="229" width="3.8" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="395.60" y="239.5" ></text>
+</g>
+<g >
+<title>do_some_marking (15,742,485 samples, 0.05%; +0.04%)</title><rect x="255.7" y="165" width="0.8" height="15.0" fill="rgb(255,192,192)" rx="2" ry="2" />
+<text  x="258.69" y="175.5" ></text>
+</g>
+<g >
+<title>De.aux_1442 (1,077,513,993 samples, 3.61%; +0.04%)</title><rect x="1366.1" y="117" width="57.1" height="15.0" fill="rgb(255,191,191)" rx="2" ry="2" />
+<text  x="1369.14" y="127.5" >De.aux..</text>
+</g>
+<g >
+<title>De.push_1323 (7,845,048 samples, 0.03%; 0.00%)</title><rect x="1361.5" y="133" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1364.54" y="143.5" ></text>
+</g>
+<g >
+<title>Zl.k_1210 (3,944,098 samples, 0.01%; 0.00%)</title><rect x="1589.6" y="213" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1592.58" y="223.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (3,948,285 samples, 0.01%; +0.01%)</title><rect x="1361.7" y="101" width="0.3" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1364.75" y="111.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (482,030,522 samples, 1.62%; 0.00%)</title><rect x="396.5" y="213" width="25.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="223.5" >c..</text>
+</g>
+<g >
+<title>De.push_1323 (39,464,826 samples, 0.13%; +0.01%)</title><rect x="1424.1" y="117" width="2.0" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="1427.06" y="127.5" ></text>
+</g>
+<g >
+<title>cfree@GLIBC_2.2.5 (3,946,428 samples, 0.01%; +0.01%)</title><rect x="401.3" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="404.27" y="159.5" ></text>
+</g>
+<g >
+<title>De.fun_5044 (3,913,344 samples, 0.01%; -0.00%)</title><rect x="1358.0" y="165" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1360.99" y="175.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (3,953,610 samples, 0.01%; 0.00%)</title><rect x="1589.4" y="165" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1592.37" y="175.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (81,923,149 samples, 0.27%; 0.00%)</title><rect x="396.5" y="165" width="4.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="399.51" y="175.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (7,865,470 samples, 0.03%; +0.00%)</title><rect x="1306.5" y="101" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1309.50" y="111.5" ></text>
+</g>
+<g >
+<title>De.inflate_1671 (138,396,212 samples, 0.46%; +0.00%)</title><rect x="1349.2" y="181" width="7.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1352.19" y="191.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_N (1,791,443,788 samples, 6.01%; -0.21%)</title><rect x="266.3" y="245" width="94.9" height="15.0" fill="rgb(115,115,255)" rx="2" ry="2" />
+<text  x="269.34" y="255.5" >caml_ba_get_N</text>
+</g>
+<g >
+<title>Zl.decode_1208 (4,549,400,336 samples, 15.25%; 0.00%)</title><rect x="1348.6" y="213" width="241.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1351.57" y="223.5" >Zl.decode_1208</text>
+</g>
+<g >
+<title>De.push_1323 (7,878,058 samples, 0.03%; +0.03%)</title><rect x="1425.7" y="69" width="0.4" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1428.73" y="79.5" ></text>
+</g>
+<g >
+<title>mark (372,541,180 samples, 1.25%; 0.00%)</title><rect x="402.1" y="165" width="19.7" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="405.10" y="175.5" ></text>
+</g>
+<g >
+<title>De.push_exn_2384 (78,542,197 samples, 0.26%; -0.00%)</title><rect x="149.8" y="261" width="4.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="152.85" y="271.5" ></text>
+</g>
+<g >
+<title>Stdlib.Random.int_aux_920 (7,238,418 samples, 0.02%; -0.01%)</title><rect x="132.4" y="277" width="0.3" height="15.0" fill="rgb(206,206,255)" rx="2" ry="2" />
+<text  x="135.35" y="287.5" ></text>
+</g>
+<g >
+<title>caml_apply2 (43,380,078 samples, 0.15%; +0.07%)</title><rect x="1338.6" y="117" width="2.3" height="15.0" fill="rgb(255,180,180)" rx="2" ry="2" />
+<text  x="1341.56" y="127.5" ></text>
+</g>
+<g >
+<title>De.blit_1401 (11,900,689 samples, 0.04%; +0.01%)</title><rect x="16.1" y="277" width="0.6" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="19.05" y="287.5" ></text>
+</g>
+<g >
+<title>De.push_1323 (23,636,137 samples, 0.08%; +0.03%)</title><rect x="1424.9" y="101" width="1.2" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="1427.90" y="111.5" ></text>
+</g>
+<g >
+<title>De.succ_literal_3692 (63,004,270 samples, 0.21%; -0.01%)</title><rect x="584.8" y="149" width="3.3" height="15.0" fill="rgb(203,203,255)" rx="2" ry="2" />
+<text  x="587.77" y="159.5" ></text>
+</g>
+<g >
+<title>De.cmd_2417 (90,715,799 samples, 0.30%; -0.13%)</title><rect x="133.9" y="261" width="4.8" height="15.0" fill="rgb(151,151,255)" rx="2" ry="2" />
+<text  x="136.94" y="271.5" ></text>
+</g>
+<g >
+<title>caml_sweep (11,817,223 samples, 0.04%; -0.04%)</title><rect x="401.1" y="165" width="0.6" height="15.0" fill="rgb(192,192,255)" rx="2" ry="2" />
+<text  x="404.06" y="175.5" ></text>
+</g>
+<g >
+<title>pool_sweep (11,860,160 samples, 0.04%; -0.00%)</title><rect x="430.3" y="165" width="0.7" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="433.34" y="175.5" ></text>
+</g>
+<g >
+<title>bigstringaf_blit_from_bytes (23,677,607 samples, 0.08%; 0.00%)</title><rect x="10.0" y="261" width="1.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" ></text>
+</g>
+<g >
+<title>De.aux_1442 (7,905,999 samples, 0.03%; -0.00%)</title><rect x="133.5" y="261" width="0.4" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="136.52" y="271.5" ></text>
+</g>
+<g >
+<title>pool_sweep (2,925,920 samples, 0.01%; +0.01%)</title><rect x="396.4" y="149" width="0.1" height="15.0" fill="rgb(255,205,205)" rx="2" ry="2" />
+<text  x="399.35" y="159.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.digest_675 (678,794,134 samples, 2.28%; +0.12%)</title><rect x="1099.3" y="149" width="35.9" height="15.0" fill="rgb(255,155,155)" rx="2" ry="2" />
+<text  x="1102.27" y="159.5" >Gin..</text>
+</g>
+<g >
+<title>_int_free_chunk (3,969,169 samples, 0.01%; +0.01%)</title><rect x="401.1" y="149" width="0.2" height="15.0" fill="rgb(255,203,203)" rx="2" ry="2" />
+<text  x="404.06" y="159.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (3,898,659 samples, 0.01%; +0.01%)</title><rect x="255.3" y="101" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="258.27" y="111.5" ></text>
+</g>
+<g >
+<title>all (29,824,598,186 samples, 100%)</title><rect x="10.0" y="309" width="1580.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" ></text>
+</g>
+<g >
+<title>caml_modify (15,771,997 samples, 0.05%; +0.03%)</title><rect x="432.9" y="277" width="0.8" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="435.91" y="287.5" ></text>
+</g>
+<g >
+<title>De.scan_2310 (19,769,445 samples, 0.07%; -0.01%)</title><rect x="97.0" y="277" width="1.1" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="100.01" y="287.5" ></text>
+</g>
+<g >
+<title>De.exists_2685 (31,641,522 samples, 0.11%; -0.00%)</title><rect x="1292.1" y="165" width="1.7" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1295.10" y="175.5" ></text>
+</g>
+<g >
+<title>De.memcpy_3656 (321,276,752 samples, 1.08%; +0.10%)</title><rect x="965.8" y="165" width="17.1" height="15.0" fill="rgb(255,166,166)" rx="2" ry="2" />
+<text  x="968.83" y="175.5" ></text>
+</g>
+<g >
+<title>oldify_one (3,898,659 samples, 0.01%; 0.00%)</title><rect x="255.3" y="117" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="258.27" y="127.5" ></text>
+</g>
+<g >
+<title>De.unsafe_blit_1030 (3,956,309 samples, 0.01%; +0.01%)</title><rect x="1356.5" y="149" width="0.2" height="15.0" fill="rgb(255,204,204)" rx="2" ry="2" />
+<text  x="1359.53" y="159.5" ></text>
+</g>
+<g >
+<title>De.fun_5468 (3,955,263 samples, 0.01%; +0.00%)</title><rect x="1306.3" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1309.29" y="111.5" ></text>
+</g>
+<g >
+<title>De.blit_1584 (3,956,309 samples, 0.01%; 0.00%)</title><rect x="1356.5" y="165" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1359.53" y="175.5" ></text>
+</g>
+<g >
+<title>Gin_adler32.fun_1369 (16,030,953 samples, 0.05%; 0.00%)</title><rect x="1354.6" y="117" width="0.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1357.64" y="127.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (19,762,067 samples, 0.07%; +0.03%)</title><rect x="131.3" y="245" width="1.1" height="15.0" fill="rgb(255,198,198)" rx="2" ry="2" />
+<text  x="134.30" y="255.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (400,107,373 samples, 1.34%; 0.00%)</title><rect x="400.8" y="197" width="21.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="403.85" y="207.5" ></text>
+</g>
+</g>
+</svg>

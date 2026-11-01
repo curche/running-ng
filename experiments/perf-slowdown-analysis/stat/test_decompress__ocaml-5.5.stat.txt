@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:56:18 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/decompress/test_decompress-ocaml-5.5 64 524288':
+
+          2,511.16 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    10,019,492,755      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    37,011,503,646      cpu_core/instructions/                                                
+             9,493      page-faults                                                           
+             9,493      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+        85,627,138      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+         1,068,773      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+            94,087      cpu_core/dTLB-load-misses/                                            
+                29      context-switches                                                      
+
+       2.512282909 seconds time elapsed
+
+       2.499800000 seconds user
+       0.011994000 seconds sys
+
+

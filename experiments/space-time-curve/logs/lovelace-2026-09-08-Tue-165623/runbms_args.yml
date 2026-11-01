@@ -1,0 +1,17 @@
+CONFIG: !!python/object/apply:pathlib.PosixPath
+- src/running/config/experiments/space_time_curve_o_sweep.yml
+LOG_DIR: !!python/object/apply:pathlib.PosixPath
+- experiments/space-time-curve/logs
+N: null
+dry_run: false
+id_prefix: null
+invocations: null
+minheap_multiplier: null
+n: []
+resume: null
+skip_oom: null
+skip_timeout: null
+slice: null
+verbose: false
+which: runbms
+workdir: null

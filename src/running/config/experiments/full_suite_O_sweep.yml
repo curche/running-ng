@@ -1,0 +1,42 @@
+# =============================================================================
+# Full-suite O= sweep (600-1000) — reconfirmation
+# =============================================================================
+# Part of the auto-compact tuning investigation (TASK 1 in PLAN.md).
+#
+# owl_gc's fine sweep (owl_ocaml_auto_compact_fine_O_sweep.yml) pinned a
+# hard compaction cliff between O=650 and O=700 for ocaml-auto-compact,
+# and showed a completely flat wall-time/RSS response from O=700 through
+# O=1000 -- confirming the Phase 5 recommendation (raise the compiled-in
+# default from 500 to 700-1000) has no downside for that one benchmark.
+# This sweep reruns the same O range across the FULL macro-benches suite
+# to confirm: (a) no other benchmark has a natural GC overhead that would
+# make a 700-1000 default newly start (or stop) compacting in a way that
+# matters, and (b) owl_gc's result reproduces under full-suite conditions.
+#
+# Reduced O grid (5 points instead of 13) and invocations (3 instead of 5)
+# given the much larger fan-out (~30 benchmarks x 5 O values).
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  suites.macro-coq-monorepo.timeout: 300
+
+runtimes:
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+modifiers:
+  O:
+    type: OCamlRunParam
+    val: "O={0}"
+
+configs:
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+
+config_sweep:
+  O: [600, 700, 800, 900, 1000]

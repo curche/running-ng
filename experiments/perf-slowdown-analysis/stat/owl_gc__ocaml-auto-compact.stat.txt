@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:44:35 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/owl/owl_gc-ocaml-auto-compact 6':
+
+          6,460.84 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    25,781,650,731      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    90,543,862,955      cpu_core/instructions/                                                
+            24,530      page-faults                                                           
+            24,530      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+       196,649,281      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+         4,678,402      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+         3,942,898      cpu_core/dTLB-load-misses/                                            
+                64      context-switches                                                      
+
+       6.462963617 seconds time elapsed
+
+       6.409947000 seconds user
+       0.051991000 seconds sys
+
+

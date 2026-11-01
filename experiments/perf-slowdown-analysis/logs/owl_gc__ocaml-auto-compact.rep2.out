@@ -1,0 +1,2 @@
+[ perf record: Woken up 251 times to write data ]
+[ perf record: Captured and wrote 62.670 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/owl_gc__ocaml-auto-compact.rep2.data (6508 samples) ]

@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:52:09 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/ocamlc-self-compile/ocamlc_self_compile-socaml':
+
+          4,739.87 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    18,697,353,820      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    44,162,551,811      cpu_core/instructions/                                                
+           272,031      page-faults                                                           
+           272,031      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+       423,385,372      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+       125,103,151      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+         4,879,350      cpu_core/dTLB-load-misses/                                            
+                50      context-switches                                                      
+
+       4.786635953 seconds time elapsed
+
+       4.445782000 seconds user
+       0.343330000 seconds sys
+
+

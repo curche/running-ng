@@ -1,0 +1,31 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=6/6)
+ocaml-5.5-falign16            0.981x    0.997x    0.910x    1.002x    0.092x   (n=6/6)
+ocaml-5.5-falign32            1.006x    1.006x    0.998x    1.014x    0.017x   (n=6/6)
+ocaml-5.5-falign              0.980x    1.006x    0.848x    1.017x    0.169x   (n=6/6)
+
+max RSS ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=6/6)
+ocaml-5.5-falign16            1.000x    1.000x    0.997x    1.004x    0.008x   (n=6/6)
+ocaml-5.5-falign32            0.999x    0.998x    0.992x    1.013x    0.021x   (n=6/6)
+ocaml-5.5-falign              1.001x    0.999x    0.998x    1.005x    0.007x   (n=6/6)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                      31.6%     25.0%     11.8%     79.9%     68.1%   (n=6/6)
+ocaml-5.5-falign16             31.7%     25.2%     11.8%     80.2%     68.4%   (n=6/6)
+ocaml-5.5-falign32             31.8%     25.1%     11.6%     80.7%     69.0%   (n=6/6)
+ocaml-5.5-falign               31.8%     25.2%     11.8%     80.5%     68.6%   (n=6/6)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                          0         0         0         0         0   (n=6/6)
+ocaml-5.5-falign16                 0         0         0         0         0   (n=6/6)
+ocaml-5.5-falign32                 0         0         0         0         0   (n=6/6)
+ocaml-5.5-falign                   0         0         0         0         0   (n=6/6)
+

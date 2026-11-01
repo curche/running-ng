@@ -1,0 +1,21 @@
+# Rebuilds pplacer_testsuite for ocaml-5.5-falign, whose _build dir was
+# deleted during TASK 3's gapfill2 fix (devkit_gzip) and never rebuilt for
+# anything else afterward. See worklog.md.
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 1
+  benchmarks:
+    macro-pplacer:
+      - pplacer_testsuite
+
+runtimes:
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"

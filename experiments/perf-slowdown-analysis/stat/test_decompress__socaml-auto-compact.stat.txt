@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:56:43 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/decompress/test_decompress-socaml-auto-compact 64 524288':
+
+          2,502.75 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+     9,985,406,924      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    37,047,152,988      cpu_core/instructions/                                                
+            14,929      page-faults                                                           
+            14,929      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+        86,283,539      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+           817,352      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+           108,305      cpu_core/dTLB-load-misses/                                            
+                27      context-switches                                                      
+
+       2.503851381 seconds time elapsed
+
+       2.485418000 seconds user
+       0.017995000 seconds sys
+
+

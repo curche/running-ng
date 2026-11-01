@@ -1,0 +1,27 @@
+# started on Wed Sep  9 15:01:22 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/liq-video-frames/liq_video_frames_pool-socaml-auto-compact 30000':
+
+              1.86 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+         7,051,689      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+         9,745,081      cpu_core/instructions/                                                
+               576      page-faults                                                           
+               576      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+           183,569      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+            64,850      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+             2,225      cpu_core/dTLB-load-misses/                                            
+                 0      context-switches                                                      
+
+       0.000021446 seconds time elapsed
+
+       0.001090000 seconds user
+       0.001090000 seconds sys
+
+

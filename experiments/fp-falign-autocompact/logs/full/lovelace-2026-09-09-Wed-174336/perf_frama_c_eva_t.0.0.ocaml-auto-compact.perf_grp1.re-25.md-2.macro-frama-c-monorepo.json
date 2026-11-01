@@ -1,0 +1,3 @@
+[{"counter-value":"6.351265","unit":"msec","event":"task-clock","event-runtime":6351265,"pcnt-running":100.0},{"counter-value":"583.000000","unit":"","event":"page-faults","event-runtime":6351265,"pcnt-running":100.0},{"counter-value":"8778695.000000","unit":"","event":"cpu_atom/cycles/","event-runtime":3751867,"pcnt-running":59.0},{"counter-value":"9496927.000000","unit":"","event":"cpu_core/cycles/","event-runtime":2599398,"pcnt-running":40.0},{"counter-value":"11173383.000000","unit":"","event":"cpu_atom/instructions/","event-runtime":3751867,"pcnt-running":59.0},{"counter-value":"12734889.000000","unit":"","event":"cpu_core/instructions/","event-runtime":2599398,"pcnt-running":40.0}]
+[]
+[]

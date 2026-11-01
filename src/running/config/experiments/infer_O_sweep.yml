@@ -1,0 +1,48 @@
+# =============================================================================
+# infer_default — auto-compact threshold (O=) sweep, reduced-scope
+# =============================================================================
+# Part of the auto-compact tuning investigation (TASK 1 in PLAN.md).
+# infer_default spawns ~12 domains (--multicore --jobs 12). The uniform
+# `re-25` (256MB minor heap per domain) used by every other benchmark in
+# this suite is sized for SEQUENTIAL single-domain workloads — 12 domains
+# at 256MB each is ~3GB of minor-heap address space, which produced both a
+# ~8x slower wall time than documented (129s vs. the doc's ~16s warm figure)
+# and a transient `domain_create` failure under back-to-back invocations,
+# plausibly from mmap-region pressure. This mirrors exactly why the
+# `macro-lavyek-monorepo` suite needs its own `re_par`/`md_par` modifiers
+# instead of the sequential default (see macro_base.yml header comment) —
+# infer is the suite's second genuinely multi-domain workload and needs the
+# same treatment. Using a much smaller minor heap here as a first attempt.
+#
+# Reduced O grid (2 values) and invocation count (3) given each invocation
+# costs real wall-clock minutes.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  benchmarks:
+    macro-infer:
+      - infer_default
+
+runtimes:
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+modifiers:
+  O:
+    type: OCamlRunParam
+    val: "O={0}"
+  re_small:
+    type: OCamlRunParam
+    val: "e={0}"
+
+configs:
+  - "ocaml-auto-compact|perf_grp1|re_small-20"
+
+config_sweep:
+  O: [5, 2000]

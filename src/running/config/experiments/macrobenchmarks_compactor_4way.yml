@@ -1,0 +1,72 @@
+# =============================================================================
+# Macro-benchmarks — 4-way compactor comparison
+# =============================================================================
+# Four compiler variants crossing two independent GC changes:
+#
+#   ocaml-5.5           : OCaml 5.5.0 — stock runtime, stock compactor
+#   ocaml-auto-compact  : OCaml 5.5 + automatic compaction only
+#                         (branch: auto-compact-5.5 in curche/ocaml)
+#   socaml              : OCaml 5.5 + chunk-based pool compactor, no auto-compact
+#                         (socaml-chunk-only branch @ 7f6d55c648 in curche/ocaml)
+#   socaml-auto-compact : OCaml 5.5 + chunk-based compactor + automatic compaction
+#                         (new_compactor branch @ 34988cfd7b in curche/ocaml)
+#
+# Comparisons:
+#   ocaml-5.5         → ocaml-auto-compact  : effect of auto-compaction alone
+#   ocaml-5.5         → socaml              : effect of new compactor alone
+#   socaml            → socaml-auto-compact : adding auto-compaction to new compactor
+#   ocaml-5.5         → socaml-auto-compact : combined effect (sanity check)
+#
+# Switches are built automatically by running-ng via `opam compiler create`
+# the first time each runtime is used.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  suites.macro-coq-monorepo.timeout: 300
+
+# =============================================================================
+# Runtimes
+# =============================================================================
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  socaml:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "socaml-chunk-only"
+
+  socaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+
+comparisons:
+  - label: "auto-compaction alone (5.5 baseline)"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+  - label: "new compactor alone (no auto-compaction)"
+    a: ocaml-5.5
+    b: socaml
+  - label: "adding auto-compaction to new compactor"
+    a: socaml
+    b: socaml-auto-compact
+  - label: "combined effect of both changes"
+    a: ocaml-5.5
+    b: socaml-auto-compact

@@ -1,0 +1,27 @@
+# started on Wed Sep  9 15:00:17 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/cpdf/cpdf_squeeze-socaml-auto-compact -squeeze /home/curche/git/macro-benches/benchmarks/cpdf/PDFReference16.pdf_toobig -o /dev/null':
+
+          5,228.84 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    20,192,858,133      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    53,484,279,327      cpu_core/instructions/                                                
+            81,492      page-faults                                                           
+            81,492      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+       408,739,443      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+       161,571,402      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+        14,788,851      cpu_core/dTLB-load-misses/                                            
+                46      context-switches                                                      
+
+       5.246886768 seconds time elapsed
+
+       5.121893000 seconds user
+       0.123973000 seconds sys
+
+

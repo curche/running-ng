@@ -1,0 +1,76 @@
+# =============================================================================
+# Space-time curve: space_overhead (o=) sweep, stock vs. new GC
+# =============================================================================
+# Methodology follows Jane Street's "Memory Allocator Showdown"
+# (https://blog.janestreet.com/memory-allocator-showdown/): sweep OCaml's
+# `space_overhead` runtime parameter (OCAMLRUNPARAM `o=`, `caml_percent_free`
+# / Percent_free_def, default 120) across a range from well below to well
+# above its default, and for each value record (wall_time, max_rss). Plotting
+# wall_time (y) against RSS (x) for each `o=` point traces out a curve per
+# runtime; a curve closer to the origin at every point is strictly better
+# (faster AND smaller), matching the post's "better = down and left" framing.
+#
+# `o=` (lowercase) is completely independent from `O=` (capital, this
+# investigation's auto-compact threshold, Max_percent_free_def) -- see
+# experiments/auto-compact-tuning/worklog.md. This sweep holds `O=` at each
+# runtime's compiled-in default and varies only `o=`, to ask a different
+# question: for a *fixed* GC (stock vs. the new chunk-allocator +
+# auto-compact GC), does the classic space/time knob trace out a better or
+# worse frontier than before?
+#
+# Range: o = [20, 40, 80, 120, 160, 240, 320] -- brackets the true default
+# (120) the same way the blog post brackets its own default (1/4x-4x), rather
+# than using a literal 1/4x-4x-of-120 range, so the sweep is legible against
+# both the post's numbers and this runtime's actual default.
+#
+# Benchmarks: pplacer_testsuite (highest GC overhead in the whole suite,
+# ~80%, see auto-compact-tuning worklog Phase 9) and owl_gc (this
+# investigation's other GC-heavy benchmark) -- the two where a real
+# space/time tradeoff is most likely to be visible at all; most benchmarks
+# in the suite have GC overhead too low for `o=` to move much.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-owl:
+      - owl_gc
+    macro-pplacer:
+      - pplacer_testsuite
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  socaml:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "socaml-chunk-only"
+
+  socaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+
+modifiers:
+  o:
+    type: OCamlRunParam
+    val: "o={0}"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+
+config_sweep:
+  o: [20, 40, 80, 120, 160, 240, 320]

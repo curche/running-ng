@@ -1,0 +1,149 @@
+# =============================================================================
+# Macro-benchmarks -- auto-compaction x falign x frame-pointers (8-way)
+# =============================================================================
+# TASK 3 (see PLAN.md). For the auto-compaction patch specifically (NOT the
+# socaml chunk allocator -- that axis was already covered separately in
+# TASK 1/2), compare every benchmark against stock `ocaml-5.5` while
+# factorially varying three independent binary knobs:
+#
+#   - auto-compaction: off (stock) / on (curche/ocaml:auto-compact-5.5)
+#   - falign:          off / on (CFLAGS=-falign-functions=64)
+#   - frame pointers:  off / on (--enable-frame-pointers)
+#
+# 2x2x2 = 8 cells. 4 of the 8 already exist as opam switches with results
+# recorded in ../compactor-comparison/ and ../compactor-comparison-falign/
+# (ocaml-5.5, ocaml-5.5-falign, ocaml-auto-compact, ocaml-auto-compact-falign).
+# The 4 frame-pointer cells are new and get built automatically by running-ng
+# (via `opam compiler create ... --configure-command`) the first time this
+# config runs -- no separate manual build step required.
+#
+# Usage:
+#   RUNNING_MACRO_BENCH_DIR=~/macro-benches \
+#   CONFIG_FILE=$(pwd)/config.yml \
+#   LOG_DIR=$(pwd)/logs \
+#     bash ../../run_ocaml_bench_gc_sweep.sh
+#
+# Or simply: `make run` from this directory (see Makefile).
+# =============================================================================
+
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+# =============================================================================
+# Runtimes -- 8 cells. Names match the existing opam switches exactly
+# (running-ng-<name>) so the 4 already-built switches are reused as-is and
+# only the 4 frame-pointer variants trigger a fresh `opam compiler create`.
+# =============================================================================
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-5.5-fp:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "--enable-frame-pointers"
+
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  ocaml-5.5-fp-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "--enable-frame-pointers"
+      - "CFLAGS=-falign-functions=64"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  ocaml-auto-compact-fp:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "--enable-frame-pointers"
+
+  ocaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  ocaml-auto-compact-fp-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "--enable-frame-pointers"
+      - "CFLAGS=-falign-functions=64"
+
+# =============================================================================
+# Configs -- 8 runtimes x default GC params (no sweep), full suite.
+# Lavyek is disabled in macro_base.yml by default, so the plain
+# re-25|md-2 pair is sufficient (no re_par/md_par/pin_lavyek needed).
+# =============================================================================
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-fp|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-fp-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-fp|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-fp-falign|perf_grp1|re-25|md-2"
+
+# =============================================================================
+# Comparisons
+#   Tier A -- every cell vs. stock ocaml-5.5 (7 entries; the 8th, stock vs.
+#             itself, is meaningless and omitted).
+#   Tier B -- four within-group comparisons that isolate the auto-compaction
+#             effect while holding falign/fp fixed. This is what lets us
+#             tell whether fp and/or falign change auto-compaction's cost,
+#             rather than only ever comparing everything back to plain
+#             stock ocaml-5.5.
+# =============================================================================
+comparisons:
+  # --- Tier A: vs. stock -----------------------------------------------
+  - label: "vs stock: fp alone"
+    a: ocaml-5.5
+    b: ocaml-5.5-fp
+  - label: "vs stock: falign alone"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign
+  - label: "vs stock: fp + falign"
+    a: ocaml-5.5
+    b: ocaml-5.5-fp-falign
+  - label: "vs stock: auto-compact alone"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+  - label: "vs stock: auto-compact + fp"
+    a: ocaml-5.5
+    b: ocaml-auto-compact-fp
+  - label: "vs stock: auto-compact + falign"
+    a: ocaml-5.5
+    b: ocaml-auto-compact-falign
+  - label: "vs stock: auto-compact + fp + falign"
+    a: ocaml-5.5
+    b: ocaml-auto-compact-fp-falign
+
+  # --- Tier B: within-group (auto-compaction effect, codegen held fixed) -
+  - label: "group baseline: auto-compact alone (no fp, no falign)"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+  - label: "group fp: auto-compact under frame pointers"
+    a: ocaml-5.5-fp
+    b: ocaml-auto-compact-fp
+  - label: "group falign: auto-compact under falign"
+    a: ocaml-5.5-falign
+    b: ocaml-auto-compact-falign
+  - label: "group fp+falign: auto-compact under both"
+    a: ocaml-5.5-fp-falign
+    b: ocaml-auto-compact-fp-falign

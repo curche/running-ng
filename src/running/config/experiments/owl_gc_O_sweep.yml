@@ -1,0 +1,50 @@
+# =============================================================================
+# owl_gc — auto-compact threshold (O=) sweep
+# =============================================================================
+# Part of the auto-compact tuning investigation (TASK 1 in PLAN.md). At the
+# runtime's compiled-in default (O=500, Max_percent_free_def in config.h),
+# owl_gc showed ZERO compactions on both auto-compact runtimes (see
+# experiments/auto-compact-tuning/worklog.md, Phase 1) — contradicting the
+# "compactions shoot up" observation that motivated this investigation. The
+# original turing session's owl_gc run reported 26,806 compactions (~100% of
+# major cycles), so this sweep starts low to find where the trigger
+# (`current_overhead >= caml_max_percent_free`, in runtime/major_gc.c
+# `should_compact_from_stw_single`) actually starts firing for this workload,
+# then continues up through PLAN.md's originally-suggested range.
+#
+# `O=` (capital) is Gc.control.max_overhead / caml_max_percent_free — NOT the
+# same as this repo's existing lowercase `o` modifier (space_overhead,
+# caml_percent_free, a different, unrelated pre-existing GC pacing knob).
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-owl:
+      - owl_gc
+
+runtimes:
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  socaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+
+modifiers:
+  O:
+    type: OCamlRunParam
+    val: "O={0}"
+
+configs:
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+
+config_sweep:
+  O: [20, 50, 100, 200, 500, 1000, 2000]

@@ -1,0 +1,35 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact            1.009x    1.000x    0.971x    1.245x    0.273x   (n=29/29)
+ocaml-5.5.1                   1.000x    1.000x    0.956x    1.028x    0.072x   (n=29/29)
+ocaml-trunk                   1.007x    1.006x    0.938x    1.088x    0.149x   (n=29/29)
+ocaml-auto-compact-trunk      1.006x    0.997x    0.934x    1.313x    0.379x   (n=28/29)
+
+max RSS ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact            1.001x    1.000x    0.995x    1.022x    0.028x   (n=29/29)
+ocaml-5.5.1                   1.001x    1.000x    0.987x    1.039x    0.053x   (n=29/29)
+ocaml-trunk                   1.029x    1.014x    0.969x    1.110x    0.141x   (n=29/29)
+ocaml-auto-compact-trunk      1.027x    1.012x    0.984x    1.130x    0.147x   (n=28/29)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                      28.9%     21.8%      0.0%     95.2%     95.2%   (n=29/29)
+ocaml-auto-compact             29.4%     21.9%      0.0%     95.3%     95.3%   (n=29/29)
+ocaml-5.5.1                    29.0%     21.9%      0.0%     95.2%     95.2%   (n=29/29)
+ocaml-trunk                    29.4%     22.2%      0.0%     95.2%     95.2%   (n=29/29)
+ocaml-auto-compact-trunk       30.5%     24.0%      0.9%     95.1%     94.2%   (n=28/29)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                          0         0         0         0         0   (n=29/29)
+ocaml-auto-compact               924         0         0     26806     26806   (n=29/29)
+ocaml-5.5.1                        0         0         0         0         0   (n=29/29)
+ocaml-trunk                        0         0         0         0         0   (n=29/29)
+ocaml-auto-compact-trunk         955         0         0     26745     26745   (n=28/29)
+

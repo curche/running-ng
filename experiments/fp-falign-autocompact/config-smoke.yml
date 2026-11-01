@@ -1,0 +1,30 @@
+# =============================================================================
+# Smoke-test variant of config.yml -- 4 fast benchmarks, 1 invocation.
+# =============================================================================
+# Purpose: (1) trigger the 4 new opam switch builds (ocaml-5.5-fp,
+# ocaml-5.5-fp-falign, ocaml-auto-compact-fp, ocaml-auto-compact-fp-falign)
+# without waiting on a multi-hour full-suite run, and (2) sanity-check the
+# harness/config before committing to the real run.
+#
+# Picks one fast benchmark per "interesting" suite: zarith_pi (known
+# speedup, cheap), owl_gc (the one benchmark auto-compaction actually
+# costs), pplacer_testsuite (the original falign-driven regression),
+# cpdf_squeeze (small Tier-2 delta from TASK 2).
+#
+# Usage: `make smoke` from this directory.
+# =============================================================================
+
+includes:
+  - "./config.yml"
+
+overrides:
+  invocations: 1
+  benchmarks:
+    macro-zarith:
+      - zarith_pi
+    macro-owl:
+      - owl_gc
+    macro-pplacer:
+      - pplacer_testsuite
+    macro-cpdf-monorepo:
+      - cpdf_squeeze

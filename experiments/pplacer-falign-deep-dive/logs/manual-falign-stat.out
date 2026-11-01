@@ -1,0 +1,29 @@
+=== perf stat -r 20 pplacer_testsuite__ocaml-5.5-falign :: /home/curche/git/macro-benches/benchmarks/pplacer/pplacer_testsuite-ocaml-5.5-falign 5 ===
+# started on Thu Sep 10 16:52:23 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/pplacer/pplacer_testsuite-ocaml-5.5-falign 5' (20 runs):
+
+              1.99 msec task-clock                                                              ( +-  1.60% )
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+         6,120,382      cpu_core/cycles/                                                        ( +-  1.54% )  (33.41%)
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+         8,996,528      cpu_core/instructions/                                                  ( +-  0.58% )  (87.23%)
+     <not counted>      cpu_atom/branches/                                                      (0.00%)
+         1,723,239      cpu_core/branches/                                                      ( +-  0.18% )
+     <not counted>      cpu_atom/branch-misses/                                                 (0.00%)
+            37,388      cpu_core/branch-misses/                                                 ( +-  0.49% )
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+           185,315      cpu_core/cache-references/                                              ( +-  0.72% )
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+            25,251      cpu_core/cache-misses/                                                  ( +- 22.59% )
+     <not counted>      cpu_atom/iTLB-load-misses/                                              (0.00%)
+             1,604      cpu_core/iTLB-load-misses/                                              ( +-  0.33% )
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+             2,257      cpu_core/dTLB-load-misses/                                              ( +-  2.10% )
+               920      cpu_core/frontend_retired.itlb_miss/                                        ( +-  2.74% )
+     <not counted>      cpu_core/frontend_retired.l1i_miss/                                        (0.00%)
+
+       0.002297390 +- 0.000035428 seconds time elapsed  ( +-  1.54% )
+
+  done pplacer_testsuite__ocaml-5.5-falign (stat)

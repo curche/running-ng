@@ -1,0 +1,47 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-trunk (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-trunk                   1.000x    1.000x    1.000x    1.000x    0.000x   (n=42/42)
+ocaml-trunk-fp                1.009x    1.004x    0.975x    1.049x    0.074x   (n=42/42)
+ocaml-trunk-falign            0.998x    0.999x    0.970x    1.034x    0.064x   (n=42/42)
+ocaml-trunk-fp-falign         1.017x    1.012x    0.984x    1.069x    0.085x   (n=42/42)
+ocaml-auto-compact            1.004x    1.000x    0.976x    1.125x    0.149x   (n=42/42)
+ocaml-auto-compact-fp         1.021x    1.010x    0.976x    1.133x    0.157x   (n=42/42)
+ocaml-auto-compact-falign     1.003x    1.002x    0.950x    1.105x    0.155x   (n=42/42)
+ocaml-auto-compact-fp-falign    1.021x    1.016x    0.992x    1.114x    0.121x   (n=42/42)
+
+max RSS ratio vs. ocaml-trunk (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-trunk                   1.000x    1.000x    1.000x    1.000x    0.000x   (n=42/42)
+ocaml-trunk-fp                1.000x    1.000x    0.962x    1.031x    0.068x   (n=42/42)
+ocaml-trunk-falign            1.001x    1.000x    0.977x    1.034x    0.057x   (n=42/42)
+ocaml-trunk-fp-falign         1.002x    1.000x    0.976x    1.041x    0.065x   (n=42/42)
+ocaml-auto-compact            1.001x    1.000x    0.969x    1.024x    0.055x   (n=42/42)
+ocaml-auto-compact-fp         1.002x    1.000x    0.976x    1.041x    0.065x   (n=42/42)
+ocaml-auto-compact-falign     1.000x    1.000x    0.965x    1.060x    0.095x   (n=42/42)
+ocaml-auto-compact-fp-falign    1.001x    1.000x    0.966x    1.024x    0.058x   (n=42/42)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-trunk                    29.5%     22.9%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-trunk-fp                 29.4%     22.9%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-trunk-falign             29.5%     22.6%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-trunk-fp-falign          29.3%     23.0%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-auto-compact             29.9%     24.0%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-auto-compact-fp          29.9%     24.2%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-auto-compact-falign      29.9%     24.0%      0.6%     94.4%     93.8%   (n=42/42)
+ocaml-auto-compact-fp-falign     29.8%     24.1%      0.6%     94.4%     93.8%   (n=42/42)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-trunk                        0         0         0         0         0   (n=42/42)
+ocaml-trunk-fp                     0         0         0         0         0   (n=42/42)
+ocaml-trunk-falign                 0         0         0         0         0   (n=42/42)
+ocaml-trunk-fp-falign              0         0         0         0         0   (n=42/42)
+ocaml-auto-compact                 0         0         0         0         0   (n=42/42)
+ocaml-auto-compact-fp              0         0         0         0         0   (n=42/42)
+ocaml-auto-compact-falign          0         0         0         0         0   (n=42/42)
+ocaml-auto-compact-fp-falign         0         0         0         0         0   (n=42/42)
+

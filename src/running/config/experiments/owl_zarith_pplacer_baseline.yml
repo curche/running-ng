@@ -1,0 +1,51 @@
+# =============================================================================
+# owl_gc / zarith_pi / pplacer_testsuite baseline — post macro-benches upgrade
+# =============================================================================
+# Part of the auto-compact tuning investigation (TASK 1 in PLAN.md). Confirms,
+# with real data (owl_gc failed to build on this machine until liblapacke-dev
+# was installed), the two observations that motivate the investigation:
+#   - zarith_pi is faster on socaml (already confirmed once; refreshed here
+#     against the upgraded macro-benches for consistency).
+#   - owl_gc's compaction count increases sharply with auto-compact enabled
+#     at the default O= threshold (500).
+# See experiments/auto-compact-tuning/worklog.md for narrative and results.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-owl:
+      - owl_gc
+    macro-zarith:
+      - zarith_pi
+    macro-pplacer:
+      - pplacer_testsuite
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  socaml:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "socaml-chunk-only"
+
+  socaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"

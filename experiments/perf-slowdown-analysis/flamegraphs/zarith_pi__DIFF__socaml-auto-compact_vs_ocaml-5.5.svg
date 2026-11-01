@@ -1,0 +1,1362 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1600" height="310" onload="init(evt)" viewBox="0 0 1600 310" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1600.0" height="310.0" fill="url(#background)"  />
+<text id="title" x="800.00" y="24" >zarith_pi: socaml-auto-compact vs ocaml-5.5 (red=more time in socaml-auto-compact)</text>
+<text id="details" x="10.00" y="293" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1490.00" y="24" >Search</text>
+<text id="ignorecase" x="1574.00" y="24" >ic</text>
+<text id="matched" x="1490.00" y="293" > </text>
+<g id="frames">
+<g >
+<title>[libgmp.so.10.5.0] (3,702,743 samples, 0.01%; +0.01%)</title><rect x="1565.4" y="181" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.36" y="191.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (3,666,831 samples, 0.01%; 0.00%)</title><rect x="1562.9" y="101" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_copyi (4,227,696 samples, 0.01%; +0.01%)</title><rect x="1550.8" y="181" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1553.77" y="191.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_unlock@@GLIBC_2.2.5 (23,675,387 samples, 0.07%; +0.07%)</title><rect x="1588.7" y="229" width="1.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1591.74" y="239.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (3,721,315 samples, 0.01%; +0.01%)</title><rect x="1574.1" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.09" y="95.5" ></text>
+</g>
+<g >
+<title>compare_val (3,288,955 samples, 0.01%; +0.01%)</title><rect x="885.8" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="888.83" y="223.5" ></text>
+</g>
+<g >
+<title>_int_malloc (7,544,804 samples, 0.02%; +0.02%)</title><rect x="1560.6" y="117" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1563.56" y="127.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (3,666,831 samples, 0.01%; 0.00%)</title><rect x="1562.9" y="69" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="79.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (3,684,216 samples, 0.01%; +0.01%)</title><rect x="1580.1" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1583.12" y="111.5" ></text>
+</g>
+<g >
+<title>update_major_slice_work (3,629,915 samples, 0.01%; +0.01%)</title><rect x="886.1" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="889.14" y="223.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (22,033,356 samples, 0.06%; 0.00%)</title><rect x="1564.0" y="149" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1566.98" y="159.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (77,269,345 samples, 0.23%; +0.02%)</title><rect x="1538.4" y="229" width="3.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1541.38" y="239.5" ></text>
+</g>
+<g >
+<title>caml_mark_roots_stw (57,070,250 samples, 0.17%; 0.00%)</title><rect x="1545.4" y="101" width="2.7" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1548.41" y="111.5" ></text>
+</g>
+<g >
+<title>_int_malloc (3,727,059 samples, 0.01%; +0.01%)</title><rect x="1567.5" y="149" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1570.51" y="159.5" ></text>
+</g>
+<g >
+<title>ml_z_tdiv_qr (313,391,401 samples, 0.92%; +0.01%)</title><rect x="1550.6" y="197" width="14.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1553.60" y="207.5" ></text>
+</g>
+<g >
+<title>caml_mark_roots_stw (29,201,046 samples, 0.09%; 0.00%)</title><rect x="1561.4" y="85" width="1.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="95.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heaps_once (141,626,328 samples, 0.42%; 0.00%)</title><rect x="1567.7" y="149" width="6.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.68" y="159.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (79,772,602 samples, 0.23%; +0.01%)</title><rect x="1560.2" y="181" width="3.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1563.24" y="191.5" ></text>
+</g>
+<g >
+<title>all (33,986,969,194 samples, 100%)</title><rect x="10.0" y="261" width="1580.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" ></text>
+</g>
+<g >
+<title>caml_memprof_scan_roots (3,565,513 samples, 0.01%; +0.01%)</title><rect x="1582.2" y="229" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.18" y="239.5" ></text>
+</g>
+<g >
+<title>decrement_stw_domains_still_processing (3,611,572 samples, 0.01%; +0.01%)</title><rect x="1562.8" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1565.77" y="111.5" ></text>
+</g>
+<g >
+<title>[libgmp.so.10.5.0] (6,572,366 samples, 0.02%; +0.02%)</title><rect x="236.3" y="213" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="239.35" y="223.5" ></text>
+</g>
+<g >
+<title>stw_cycle_all_domains (3,666,831 samples, 0.01%; 0.00%)</title><rect x="1562.9" y="85" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="95.5" ></text>
+</g>
+<g >
+<title>mark_stack_push_block (3,605,775 samples, 0.01%; +0.01%)</title><rect x="1562.6" y="37" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1565.60" y="47.5" ></text>
+</g>
+<g >
+<title>caml_darken (29,538,597 samples, 0.09%; +0.09%)</title><rect x="1580.6" y="229" width="1.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1583.64" y="239.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_trim (21,533,717 samples, 0.06%; +0.06%)</title><rect x="1538.7" y="213" width="1.0" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1541.72" y="223.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (26,636,901 samples, 0.08%; +0.02%)</title><rect x="1527.2" y="181" width="1.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1530.24" y="191.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heaps_once (32,812,618 samples, 0.10%; 0.00%)</title><rect x="1561.4" y="133" width="1.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="143.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (24,001,877 samples, 0.07%; +0.01%)</title><rect x="1528.5" y="197" width="1.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1531.47" y="207.5" ></text>
+</g>
+<g >
+<title>__sbrk (3,466,076 samples, 0.01%; +0.01%)</title><rect x="1529.4" y="149" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1532.43" y="159.5" ></text>
+</g>
+<g >
+<title>ml_z_mul (2,383,670 samples, 0.01%; +0.01%)</title><rect x="1584.9" y="229" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1587.87" y="239.5" ></text>
+</g>
+<g >
+<title>ml_z_div (313,391,401 samples, 0.92%; 0.00%)</title><rect x="1550.6" y="213" width="14.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1553.60" y="223.5" ></text>
+</g>
+<g >
+<title>caml_interrupt_all_signal_safe (3,635,521 samples, 0.01%; +0.01%)</title><rect x="1574.3" y="149" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.26" y="159.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (3,684,216 samples, 0.01%; 0.00%)</title><rect x="1580.1" y="117" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="127.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (123,686,386 samples, 0.36%; +0.18%)</title><rect x="1568.2" y="85" width="5.7" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="1571.17" y="95.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (53,402,216 samples, 0.16%; +0.06%)</title><rect x="1545.4" y="85" width="2.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1548.41" y="95.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (10,124,402 samples, 0.03%; +0.03%)</title><rect x="1528.8" y="181" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1531.80" y="191.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small_dispatch (22,033,356 samples, 0.06%; 0.00%)</title><rect x="1564.0" y="165" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1566.98" y="175.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (11,049,450 samples, 0.03%; 0.00%)</title><rect x="1548.9" y="101" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1551.90" y="111.5" ></text>
+</g>
+<g >
+<title>oldify_mopup (3,611,252 samples, 0.01%; +0.01%)</title><rect x="1548.1" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1551.06" y="111.5" ></text>
+</g>
+<g >
+<title>caml_sweep (3,661,519 samples, 0.01%; +0.01%)</title><rect x="1583.4" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1586.40" y="239.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_trim (3,720,374 samples, 0.01%; +0.01%)</title><rect x="1548.9" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1551.90" y="95.5" ></text>
+</g>
+<g >
+<title>caml_memprof_after_minor_gc (3,694,500 samples, 0.01%; +0.01%)</title><rect x="1573.9" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1576.92" y="111.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Zarith_pi.digit_477 (22,593,613 samples, 0.07%; +0.01%)</title><rect x="1582.3" y="181" width="1.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.35" y="191.5" ></text>
+</g>
+<g >
+<title>caml_ev_counter (3,560,110 samples, 0.01%; +0.01%)</title><rect x="1579.8" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1582.79" y="111.5" ></text>
+</g>
+<g >
+<title>_int_malloc (3,453,706 samples, 0.01%; +0.01%)</title><rect x="1542.0" y="229" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1544.98" y="239.5" ></text>
+</g>
+<g >
+<title>caml_cycle_heap (3,703,177 samples, 0.01%; +0.01%)</title><rect x="1549.4" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1552.41" y="95.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (3,645,069 samples, 0.01%; +0.01%)</title><rect x="1549.1" y="85" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1552.07" y="95.5" ></text>
+</g>
+<g >
+<title>caml_c_call (3,698,327 samples, 0.01%; +0.01%)</title><rect x="1583.0" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1586.03" y="143.5" ></text>
+</g>
+<g >
+<title>__brk (7,021,376 samples, 0.02%; 0.00%)</title><rect x="1541.7" y="165" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1544.65" y="175.5" ></text>
+</g>
+<g >
+<title>__gmp_default_allocate (33,672,518 samples, 0.10%; +0.02%)</title><rect x="1526.9" y="197" width="1.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1529.91" y="207.5" ></text>
+</g>
+<g >
+<title>caml_c_call (3,545,362 samples, 0.01%; +0.01%)</title><rect x="1583.2" y="149" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1586.20" y="159.5" ></text>
+</g>
+<g >
+<title>caml_check_urgent_gc (264,094,791 samples, 0.78%; 0.00%)</title><rect x="1567.7" y="181" width="12.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.68" y="191.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (141,626,328 samples, 0.42%; 0.00%)</title><rect x="1567.7" y="133" width="6.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.68" y="143.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (185,836,253 samples, 0.55%; +0.03%)</title><rect x="1529.7" y="229" width="8.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1532.75" y="239.5" ></text>
+</g>
+<g >
+<title>caml_do_pending_actions_res (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="197" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="207.5" ></text>
+</g>
+<g >
+<title>__brk (3,684,007 samples, 0.01%; +0.01%)</title><rect x="1549.2" y="37" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1552.24" y="47.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (141,626,328 samples, 0.42%; 0.00%)</title><rect x="1567.7" y="117" width="6.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.68" y="127.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (31,390,786 samples, 0.09%; +0.09%)</title><rect x="1539.7" y="213" width="1.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1542.72" y="223.5" ></text>
+</g>
+<g >
+<title>entries_apply_actions (3,403,453 samples, 0.01%; +0.01%)</title><rect x="236.0" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="239.02" y="223.5" ></text>
+</g>
+<g >
+<title>mark_stack_push_block (3,513,221 samples, 0.01%; +0.01%)</title><rect x="1584.4" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1587.38" y="223.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (3,703,177 samples, 0.01%; 0.00%)</title><rect x="1549.4" y="117" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.41" y="127.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (10,754,900 samples, 0.03%; +0.01%)</title><rect x="1560.9" y="101" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1563.91" y="111.5" ></text>
+</g>
+<g >
+<title>__gmp_default_allocate (3,632,084 samples, 0.01%; +0.01%)</title><rect x="886.5" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="889.48" y="239.5" ></text>
+</g>
+<g >
+<title>mark (21,767,665 samples, 0.06%; 0.00%)</title><rect x="1549.6" y="117" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.59" y="127.5" ></text>
+</g>
+<g >
+<title>caml_sweep (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="133" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="143.5" ></text>
+</g>
+<g >
+<title>compare_val (3,546,468 samples, 0.01%; +0.01%)</title><rect x="1542.9" y="197" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1545.92" y="207.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (60,681,502 samples, 0.18%; 0.00%)</title><rect x="1545.4" y="133" width="2.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1548.41" y="143.5" ></text>
+</g>
+<g >
+<title>caml_check_urgent_gc (54,704,365 samples, 0.16%; 0.00%)</title><rect x="1561.4" y="165" width="2.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="175.5" ></text>
+</g>
+<g >
+<title>caml_check_urgent_gc (115,394,282 samples, 0.34%; +0.01%)</title><rect x="1545.2" y="181" width="5.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1548.23" y="191.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small_dispatch (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="213" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="223.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (7,544,804 samples, 0.02%; 0.00%)</title><rect x="1560.6" y="133" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.56" y="143.5" ></text>
+</g>
+<g >
+<title>ml_z_addsub (161,682,318 samples, 0.48%; +0.06%)</title><rect x="1543.1" y="213" width="7.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1546.08" y="223.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (264,094,791 samples, 0.78%; 0.00%)</title><rect x="1567.7" y="165" width="12.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.68" y="175.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (60,681,502 samples, 0.18%; 0.00%)</title><rect x="1545.4" y="117" width="2.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1548.41" y="127.5" ></text>
+</g>
+<g >
+<title>__default_morecore@GLIBC_2.2.5 (3,466,076 samples, 0.01%; 0.00%)</title><rect x="1529.4" y="165" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1532.43" y="175.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="149" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="159.5" ></text>
+</g>
+<g >
+<title>malloc (3,546,782 samples, 0.01%; +0.01%)</title><rect x="1584.7" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1587.70" y="239.5" ></text>
+</g>
+<g >
+<title>caml_c_call (3,734,343 samples, 0.01%; +0.01%)</title><rect x="1582.7" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.68" y="143.5" ></text>
+</g>
+<g >
+<title>pthread_cond_broadcast@@GLIBC_2.3.2 (7,152,897 samples, 0.02%; +0.02%)</title><rect x="1585.7" y="229" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1588.65" y="239.5" ></text>
+</g>
+<g >
+<title>unlink_chunk.isra.0 (3,523,952 samples, 0.01%; +0.01%)</title><rect x="1589.8" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1592.84" y="239.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (142,392,444 samples, 0.42%; +0.01%)</title><rect x="1544.0" y="197" width="6.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1546.98" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_copyi (120,422,855 samples, 0.35%; +0.35%)</title><rect x="979.7" y="229" width="5.6" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="982.74" y="239.5" ></text>
+</g>
+<g >
+<title>__gmp_tmp_reentrant_free (24,001,877 samples, 0.07%; 0.00%)</title><rect x="1528.5" y="213" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1531.47" y="223.5" ></text>
+</g>
+<g >
+<title>stw_cycle_all_domains (10,736,694 samples, 0.03%; 0.00%)</title><rect x="1575.6" y="101" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1578.56" y="111.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (3,518,089 samples, 0.01%; +0.01%)</title><rect x="1559.9" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1562.92" y="143.5" ></text>
+</g>
+<g >
+<title>caml_memprof_sample_block (3,565,758 samples, 0.01%; +0.01%)</title><rect x="1544.2" y="165" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1547.15" y="175.5" ></text>
+</g>
+<g >
+<title>__gmp_tmp_reentrant_free (3,518,089 samples, 0.01%; 0.00%)</title><rect x="1559.9" y="165" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1562.92" y="175.5" ></text>
+</g>
+<g >
+<title>caml_sweep (7,200,869 samples, 0.02%; 0.00%)</title><rect x="1561.1" y="85" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.07" y="95.5" ></text>
+</g>
+<g >
+<title>systrim.constprop.0 (6,906,988 samples, 0.02%; +0.01%)</title><rect x="1529.3" y="181" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1532.27" y="191.5" ></text>
+</g>
+<g >
+<title>systrim.constprop.0 (3,684,007 samples, 0.01%; 0.00%)</title><rect x="1549.2" y="85" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.24" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_1 (2,391,696,857 samples, 7.04%; +7.04%)</title><rect x="985.5" y="229" width="111.2" height="15.0" fill="rgb(255,171,171)" rx="2" ry="2" />
+<text  x="988.51" y="239.5" >__gmpn_mul_1</text>
+</g>
+<g >
+<title>caml_alloc_shr (23,242,403 samples, 0.07%; 0.00%)</title><rect x="1544.2" y="181" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1547.15" y="191.5" ></text>
+</g>
+<g >
+<title>Z.add_287 (3,734,343 samples, 0.01%; 0.00%)</title><rect x="1582.7" y="149" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1585.68" y="159.5" ></text>
+</g>
+<g >
+<title>__default_morecore@GLIBC_2.2.5 (3,543,176 samples, 0.01%; 0.00%)</title><rect x="1537.9" y="197" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1540.89" y="207.5" ></text>
+</g>
+<g >
+<title>_int_free_merge_chunk (3,702,472 samples, 0.01%; +0.01%)</title><rect x="1564.7" y="69" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1567.66" y="79.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (54,704,365 samples, 0.16%; 0.00%)</title><rect x="1561.4" y="149" width="2.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="159.5" ></text>
+</g>
+<g >
+<title>caml_c_call (3,752,933 samples, 0.01%; +0.01%)</title><rect x="884.8" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="887.80" y="223.5" ></text>
+</g>
+<g >
+<title>caml_program (22,593,613 samples, 0.07%; 0.00%)</title><rect x="1582.3" y="213" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1585.35" y="223.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heap_setup (3,561,976 samples, 0.01%; +0.01%)</title><rect x="1575.6" y="69" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1578.56" y="79.5" ></text>
+</g>
+<g >
+<title>Z.mul_300 (3,803,330 samples, 0.01%; +0.01%)</title><rect x="1582.9" y="133" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.85" y="143.5" ></text>
+</g>
+<g >
+<title>pool_sweep (3,523,858 samples, 0.01%; +0.01%)</title><rect x="1585.5" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1588.49" y="239.5" ></text>
+</g>
+<g >
+<title>caml_do_roots (6,969,769 samples, 0.02%; 0.00%)</title><rect x="1567.8" y="85" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.84" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul (3,493,040 samples, 0.01%; +0.01%)</title><rect x="1560.1" y="165" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1563.08" y="175.5" ></text>
+</g>
+<g >
+<title>caml_sweep (18,422,345 samples, 0.05%; 0.00%)</title><rect x="1564.1" y="101" width="0.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1567.14" y="111.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (6,969,769 samples, 0.02%; +0.02%)</title><rect x="1567.8" y="53" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1570.84" y="63.5" ></text>
+</g>
+<g >
+<title>mark (18,224,916 samples, 0.05%; 0.00%)</title><rect x="1563.1" y="101" width="0.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1566.11" y="111.5" ></text>
+</g>
+<g >
+<title>cfree@GLIBC_2.2.5 (17,429,250 samples, 0.05%; +0.05%)</title><rect x="1583.6" y="229" width="0.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1586.57" y="239.5" ></text>
+</g>
+<g >
+<title>pool_sweep (7,200,869 samples, 0.02%; +0.02%)</title><rect x="1561.1" y="69" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1564.07" y="79.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (3,442,206 samples, 0.01%; +0.01%)</title><rect x="1575.9" y="69" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1578.90" y="79.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (10,620,928 samples, 0.03%; +0.01%)</title><rect x="1560.4" y="149" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1563.42" y="159.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (3,666,831 samples, 0.01%; 0.00%)</title><rect x="1562.9" y="53" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="63.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (19,676,645 samples, 0.06%; 0.00%)</title><rect x="1544.3" y="165" width="0.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1547.32" y="175.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small (10,754,900 samples, 0.03%; 0.00%)</title><rect x="1560.9" y="165" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.91" y="175.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (111,675,658 samples, 0.33%; 0.00%)</title><rect x="1545.4" y="165" width="5.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1548.41" y="175.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (305,684,399 samples, 0.90%; 0.00%)</title><rect x="1565.7" y="197" width="14.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1568.75" y="207.5" ></text>
+</g>
+<g >
+<title>__sbrk (3,543,176 samples, 0.01%; 0.00%)</title><rect x="1537.9" y="181" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1540.89" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (7,194,369 samples, 0.02%; +0.02%)</title><rect x="1585.2" y="213" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1588.15" y="223.5" ></text>
+</g>
+<g >
+<title>_int_malloc (23,328,013 samples, 0.07%; +0.07%)</title><rect x="1566.4" y="133" width="1.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1569.42" y="143.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_trim (7,400,003 samples, 0.02%; +0.02%)</title><rect x="1564.3" y="69" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1567.32" y="79.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (23,328,013 samples, 0.07%; 0.00%)</title><rect x="1566.4" y="149" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1569.42" y="159.5" ></text>
+</g>
+<g >
+<title>entries_apply_actions (3,513,221 samples, 0.01%; 0.00%)</title><rect x="1584.4" y="229" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1587.38" y="239.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (32,812,618 samples, 0.10%; 0.00%)</title><rect x="1561.4" y="117" width="1.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="127.5" ></text>
+</g>
+<g >
+<title>caml_darken (61,624,609 samples, 0.18%; +0.15%)</title><rect x="1571.1" y="69" width="2.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1574.05" y="79.5" ></text>
+</g>
+<g >
+<title>[unknown] (7,021,376 samples, 0.02%; +0.02%)</title><rect x="1541.7" y="149" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1544.65" y="159.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heaps_once (60,681,502 samples, 0.18%; 0.00%)</title><rect x="1545.4" y="149" width="2.8" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1548.41" y="159.5" ></text>
+</g>
+<g >
+<title>caml_adjust_gc_speed (3,675,570 samples, 0.01%; +0.01%)</title><rect x="1565.7" y="181" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.75" y="191.5" ></text>
+</g>
+<g >
+<title>[unknown] (13,974,602,349 samples, 41.12%; +2.68%)</title><rect x="236.7" y="229" width="649.6" height="15.0" fill="rgb(255,195,195)" rx="2" ry="2" />
+<text  x="239.65" y="239.5" >[unknown]</text>
+</g>
+<g >
+<title>caml_major_collection_slice (50,994,156 samples, 0.15%; 0.00%)</title><rect x="1548.2" y="149" width="2.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1551.23" y="159.5" ></text>
+</g>
+<g >
+<title>caml_alloc_shr (7,413,737 samples, 0.02%; +0.02%)</title><rect x="1542.4" y="229" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1545.40" y="239.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (29,201,046 samples, 0.09%; +0.01%)</title><rect x="1561.4" y="69" width="1.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1564.41" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (3,352,034 samples, 0.01%; +0.01%)</title><rect x="1529.6" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1532.59" y="223.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (29,201,046 samples, 0.09%; 0.00%)</title><rect x="1561.4" y="101" width="1.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1564.41" y="111.5" ></text>
+</g>
+<g >
+<title>ephe_todo_list_emptied (3,668,034 samples, 0.01%; +0.01%)</title><rect x="1547.9" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1550.89" y="95.5" ></text>
+</g>
+<g >
+<title>ml_z_mul (313,898,824 samples, 0.92%; +0.01%)</title><rect x="1565.5" y="213" width="14.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.53" y="223.5" ></text>
+</g>
+<g >
+<title>update_major_slice_work (3,560,110 samples, 0.01%; 0.00%)</title><rect x="1579.8" y="117" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1582.79" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_lshift (3,704,326 samples, 0.01%; +0.01%)</title><rect x="985.3" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="988.34" y="239.5" ></text>
+</g>
+<g >
+<title>caml_sweep (20,524,000 samples, 0.06%; +0.01%)</title><rect x="1574.6" y="117" width="1.0" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.61" y="127.5" ></text>
+</g>
+<g >
+<title>__sbrk (3,684,007 samples, 0.01%; 0.00%)</title><rect x="1549.2" y="53" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.24" y="63.5" ></text>
+</g>
+<g >
+<title>caml_memprof_sample_block (7,278,043 samples, 0.02%; +0.02%)</title><rect x="1566.1" y="165" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1569.08" y="175.5" ></text>
+</g>
+<g >
+<title>caml_sweep (3,702,732 samples, 0.01%; +0.01%)</title><rect x="885.5" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="888.49" y="223.5" ></text>
+</g>
+<g >
+<title>__default_morecore@GLIBC_2.2.5 (13,812,389 samples, 0.04%; 0.00%)</title><rect x="1541.3" y="197" width="0.7" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1544.33" y="207.5" ></text>
+</g>
+<g >
+<title>caml_alloc_custom (3,539,565 samples, 0.01%; +0.01%)</title><rect x="1580.0" y="197" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1582.96" y="207.5" ></text>
+</g>
+<g >
+<title>__sbrk (13,812,389 samples, 0.04%; +0.02%)</title><rect x="1541.3" y="181" width="0.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1544.33" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (4,670,080,049 samples, 13.74%; +13.74%)</title><rect x="1096.7" y="229" width="217.1" height="15.0" fill="rgb(255,134,134)" rx="2" ry="2" />
+<text  x="1099.69" y="239.5" >__gmpn_mul_basecase</text>
+</g>
+<g >
+<title>caml_sweep (18,298,570 samples, 0.05%; +0.02%)</title><rect x="1548.6" y="117" width="0.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1551.56" y="127.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (7,174,718 samples, 0.02%; +0.01%)</title><rect x="1575.7" y="85" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1578.73" y="95.5" ></text>
+</g>
+<g >
+<title>Z.mul_300 (7,501,657 samples, 0.02%; 0.00%)</title><rect x="1582.9" y="149" width="0.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1585.85" y="159.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (22,033,356 samples, 0.06%; +0.01%)</title><rect x="1564.0" y="117" width="1.0" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1566.98" y="127.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (3,666,831 samples, 0.01%; +0.01%)</title><rect x="1562.9" y="37" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1565.93" y="47.5" ></text>
+</g>
+<g >
+<title>mark (76,611,439 samples, 0.23%; 0.00%)</title><rect x="1576.2" y="117" width="3.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1579.23" y="127.5" ></text>
+</g>
+<g >
+<title>caml_ev_begin (3,658,407 samples, 0.01%; +0.01%)</title><rect x="236.2" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="239.18" y="223.5" ></text>
+</g>
+<g >
+<title>commit_major_slice_work (3,704,656 samples, 0.01%; +0.01%)</title><rect x="885.7" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="888.66" y="223.5" ></text>
+</g>
+<g >
+<title>caml_mark_roots_stw (130,656,155 samples, 0.38%; 0.00%)</title><rect x="1567.8" y="101" width="6.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.84" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (4,550,202,332 samples, 13.39%; +13.39%)</title><rect x="1313.8" y="229" width="211.5" height="15.0" fill="rgb(255,136,136)" rx="2" ry="2" />
+<text  x="1316.80" y="239.5" >__gmpn_sub_n</text>
+</g>
+<g >
+<title>do_some_marking (18,224,916 samples, 0.05%; +0.05%)</title><rect x="1563.1" y="85" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1566.11" y="95.5" ></text>
+</g>
+<g >
+<title>caml_empty_minor_heap_no_major_slice_from_stw (3,561,976 samples, 0.01%; 0.00%)</title><rect x="1575.6" y="85" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1578.56" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (14,407,460 samples, 0.04%; +0.02%)</title><rect x="1559.6" y="181" width="0.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1562.57" y="191.5" ></text>
+</g>
+<g >
+<title>__brk (3,543,176 samples, 0.01%; +0.01%)</title><rect x="1537.9" y="165" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1540.89" y="175.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (3,518,089 samples, 0.01%; 0.00%)</title><rect x="1559.9" y="149" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1562.92" y="159.5" ></text>
+</g>
+<g >
+<title>caml_equal (3,546,468 samples, 0.01%; 0.00%)</title><rect x="1542.9" y="213" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1545.92" y="223.5" ></text>
+</g>
+<g >
+<title>commit_major_slice_work (3,684,628 samples, 0.01%; +0.01%)</title><rect x="1576.1" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1579.06" y="127.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (3,537,207 samples, 0.01%; +0.01%)</title><rect x="884.5" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="887.48" y="223.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (50,994,156 samples, 0.15%; +0.02%)</title><rect x="1548.2" y="133" width="2.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1551.23" y="143.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (6,969,769 samples, 0.02%; 0.00%)</title><rect x="1567.8" y="69" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1570.84" y="79.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Zarith_pi.comp_448 (18,450,690 samples, 0.05%; +0.01%)</title><rect x="1582.5" y="165" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.51" y="175.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small (22,533,856 samples, 0.07%; +0.00%)</title><rect x="1564.0" y="181" width="1.0" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1566.95" y="191.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (22,033,356 samples, 0.06%; 0.00%)</title><rect x="1564.0" y="133" width="1.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1566.98" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.String.118 (3,658,407 samples, 0.01%; 0.00%)</title><rect x="236.2" y="229" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="239.18" y="239.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (2,256,157 samples, 0.01%; +0.01%)</title><rect x="1574.8" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.78" y="111.5" ></text>
+</g>
+<g >
+<title>systrim.constprop.0 (17,126,319 samples, 0.05%; +0.01%)</title><rect x="1541.2" y="213" width="0.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1544.18" y="223.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (21,891,747 samples, 0.06%; 0.00%)</title><rect x="1562.9" y="133" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="143.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (118,832,942 samples, 0.35%; +0.01%)</title><rect x="1574.4" y="133" width="5.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.43" y="143.5" ></text>
+</g>
+<g >
+<title>mark_stack_push_block (10,178,799 samples, 0.03%; +0.03%)</title><rect x="1573.4" y="53" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1576.45" y="63.5" ></text>
+</g>
+<g >
+<title>caml_darken (32,869,336 samples, 0.10%; +0.10%)</title><rect x="1546.4" y="69" width="1.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1549.36" y="79.5" ></text>
+</g>
+<g >
+<title>caml_do_local_roots (3,554,358 samples, 0.01%; +0.01%)</title><rect x="1567.7" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1570.68" y="111.5" ></text>
+</g>
+<g >
+<title>stw_cycle_all_domains (3,703,177 samples, 0.01%; 0.00%)</title><rect x="1549.4" y="101" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.41" y="111.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (3,439,341 samples, 0.01%; +0.01%)</title><rect x="886.0" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="888.98" y="223.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (3,694,460 samples, 0.01%; +0.01%)</title><rect x="886.3" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="889.31" y="223.5" ></text>
+</g>
+<g >
+<title>_int_malloc (19,649,520 samples, 0.06%; +0.06%)</title><rect x="1527.6" y="165" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1530.56" y="175.5" ></text>
+</g>
+<g >
+<title>[zarith_pi-socaml-auto-compact] (3,694,460 samples, 0.01%; 0.00%)</title><rect x="886.3" y="229" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="889.31" y="239.5" ></text>
+</g>
+<g >
+<title>do_some_marking (21,767,665 samples, 0.06%; +0.06%)</title><rect x="1549.6" y="101" width="1.0" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1552.59" y="111.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (118,832,942 samples, 0.35%; 0.00%)</title><rect x="1574.4" y="149" width="5.6" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1577.43" y="159.5" ></text>
+</g>
+<g >
+<title>do_some_marking (76,611,439 samples, 0.23%; +0.23%)</title><rect x="1576.2" y="101" width="3.6" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="1579.23" y="111.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="181" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="191.5" ></text>
+</g>
+<g >
+<title>caml_alloc_shr (37,914,038 samples, 0.11%; +0.01%)</title><rect x="1565.9" y="181" width="1.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.92" y="191.5" ></text>
+</g>
+<g >
+<title>caml_try_run_on_all_domains_with_spin_work (10,736,694 samples, 0.03%; 0.00%)</title><rect x="1575.6" y="117" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1578.56" y="127.5" ></text>
+</g>
+<g >
+<title>_int_malloc (17,101,521 samples, 0.05%; +0.05%)</title><rect x="1544.4" y="133" width="0.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1547.44" y="143.5" ></text>
+</g>
+<g >
+<title>ml_z_tdiv_qr (10,958,200 samples, 0.03%; +0.01%)</title><rect x="1585.0" y="229" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1587.98" y="239.5" ></text>
+</g>
+<g >
+<title>zarith_pi-socam (33,986,969,194 samples, 100.00%; +14.31%)</title><rect x="10.0" y="245" width="1580.0" height="15.0" fill="rgb(255,131,131)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >zarith_pi-socam</text>
+</g>
+<g >
+<title>Dune.exe.Zarith_pi.digit_477 (3,745,526 samples, 0.01%; +0.01%)</title><rect x="279.0" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="281.98" y="223.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (10,754,900 samples, 0.03%; 0.00%)</title><rect x="1560.9" y="117" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.91" y="127.5" ></text>
+</g>
+<g >
+<title>unlink_chunk.isra.0 (6,993,190 samples, 0.02%; +0.02%)</title><rect x="1538.1" y="197" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1541.06" y="207.5" ></text>
+</g>
+<g >
+<title>caml_start_program (22,593,613 samples, 0.07%; 0.00%)</title><rect x="1582.3" y="229" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1585.35" y="239.5" ></text>
+</g>
+<g >
+<title>_int_malloc (175,435,790 samples, 0.52%; +0.49%)</title><rect x="1530.2" y="213" width="8.2" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="1533.23" y="223.5" ></text>
+</g>
+<g >
+<title>__default_morecore@GLIBC_2.2.5 (3,684,007 samples, 0.01%; 0.00%)</title><rect x="1549.2" y="69" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1552.24" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (94,977,017 samples, 0.28%; +0.09%)</title><rect x="1525.3" y="229" width="4.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1528.33" y="239.5" ></text>
+</g>
+<g >
+<title>caml_darken (25,504,466 samples, 0.08%; +0.06%)</title><rect x="1561.6" y="53" width="1.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1564.58" y="63.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (3,481,051 samples, 0.01%; +0.01%)</title><rect x="1584.5" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1587.54" y="239.5" ></text>
+</g>
+<g >
+<title>Stdlib.Domain.16 (3,403,453 samples, 0.01%; 0.00%)</title><rect x="236.0" y="229" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="239.02" y="239.5" ></text>
+</g>
+<g >
+<title>pool_sweep (10,970,303 samples, 0.03%; +0.03%)</title><rect x="1575.0" y="101" width="0.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1578.05" y="111.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (27,055,072 samples, 0.08%; 0.00%)</title><rect x="1566.4" y="165" width="1.3" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1569.42" y="175.5" ></text>
+</g>
+<g >
+<title>[libgmp.so.10.5.0] (6,572,366 samples, 0.02%; 0.00%)</title><rect x="236.3" y="229" width="0.4" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="239.35" y="239.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (4,258,293 samples, 0.01%; +0.01%)</title><rect x="1542.2" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1545.21" y="239.5" ></text>
+</g>
+<g >
+<title>pool_sweep (7,444,205 samples, 0.02%; +0.02%)</title><rect x="1580.3" y="117" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1583.29" y="127.5" ></text>
+</g>
+<g >
+<title>ml_z_reduce (3,610,918 samples, 0.01%; +0.01%)</title><rect x="1565.0" y="181" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.00" y="191.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (21,891,747 samples, 0.06%; 0.00%)</title><rect x="1562.9" y="117" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1565.93" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (2,002,318,655 samples, 5.89%; +5.89%)</title><rect x="886.7" y="229" width="93.0" height="15.0" fill="rgb(255,177,177)" rx="2" ry="2" />
+<text  x="889.65" y="239.5" >__gmpn_add_n</text>
+</g>
+<g >
+<title>caml_call_gc (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="229" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="239.5" ></text>
+</g>
+<g >
+<title>caml_alloc_shr (10,620,928 samples, 0.03%; 0.00%)</title><rect x="1560.4" y="165" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.42" y="175.5" ></text>
+</g>
+<g >
+<title>ml_z_format (7,768,253 samples, 0.02%; +0.01%)</title><rect x="1565.2" y="213" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1568.17" y="223.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Zarith_pi.entry (22,593,613 samples, 0.07%; 0.00%)</title><rect x="1582.3" y="197" width="1.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1585.35" y="207.5" ></text>
+</g>
+<g >
+<title>[libgmp.so.10.5.0] (3,702,743 samples, 0.01%; 0.00%)</title><rect x="1565.4" y="197" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1568.36" y="207.5" ></text>
+</g>
+<g >
+<title>caml_major_collection_slice (11,128,421 samples, 0.03%; 0.00%)</title><rect x="1580.1" y="165" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1583.12" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (185,180,413 samples, 0.54%; +0.54%)</title><rect x="1551.0" y="181" width="8.6" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="1553.97" y="191.5" ></text>
+</g>
+<g >
+<title>free@plt (3,626,096 samples, 0.01%; +0.01%)</title><rect x="1574.9" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1577.88" y="111.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (31,074,983 samples, 0.09%; +0.09%)</title><rect x="1586.0" y="229" width="1.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1588.98" y="239.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (19,676,645 samples, 0.06%; +0.01%)</title><rect x="1544.3" y="149" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1547.32" y="159.5" ></text>
+</g>
+<g >
+<title>Z.add_287 (3,638,377 samples, 0.01%; +0.01%)</title><rect x="279.2" y="213" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="282.16" y="223.5" ></text>
+</g>
+<g >
+<title>__gmp_tmp_reentrant_alloc (37,103,474 samples, 0.11%; +0.01%)</title><rect x="1526.7" y="213" width="1.8" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1529.75" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_1 (13,017,380,860 samples, 38.30%; +38.30%)</title><rect x="279.3" y="213" width="605.2" height="15.0" fill="rgb(255,0,0)" rx="2" ry="2" />
+<text  x="282.33" y="223.5" >__gmpn_mul_1</text>
+</g>
+<g >
+<title>pthread_mutex_trylock@@GLIBC_2.34 (28,123,138 samples, 0.08%; +0.08%)</title><rect x="1587.4" y="229" width="1.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1590.43" y="239.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (3,721,315 samples, 0.01%; 0.00%)</title><rect x="1574.1" y="101" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1577.09" y="111.5" ></text>
+</g>
+<g >
+<title>cfree@GLIBC_2.2.5 (3,557,671 samples, 0.01%; +0.01%)</title><rect x="1564.8" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1567.83" y="95.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (14,864,674 samples, 0.04%; +0.01%)</title><rect x="1564.1" y="85" width="0.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1567.14" y="95.5" ></text>
+</g>
+<g >
+<title>caml_poll_gc_work (10,754,900 samples, 0.03%; 0.00%)</title><rect x="1560.9" y="133" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.91" y="143.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_trim (3,674,944 samples, 0.01%; +0.01%)</title><rect x="1528.6" y="181" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1531.63" y="191.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small_dispatch (10,754,900 samples, 0.03%; 0.00%)</title><rect x="1560.9" y="149" width="0.5" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="1563.91" y="159.5" ></text>
+</g>
+<g >
+<title>_int_free_chunk (3,255,557 samples, 0.01%; +0.01%)</title><rect x="884.6" y="213" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="887.65" y="223.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (11,032,931 samples, 0.03%; +0.03%)</title><rect x="885.0" y="213" width="0.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="887.97" y="223.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (3,617,785 samples, 0.01%; +0.01%)</title><rect x="1582.0" y="229" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1585.01" y="239.5" ></text>
+</g>
+<g >
+<title>caml_c_call (803,899,655 samples, 2.37%; +0.01%)</title><rect x="1542.7" y="229" width="37.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1545.75" y="239.5" >cam..</text>
+</g>
+</g>
+</svg>

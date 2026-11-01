@@ -1,0 +1,44 @@
+# =============================================================================
+# pplacer_testsuite — auto-compact threshold (O=) sweep
+# =============================================================================
+# Companion to owl_gc_O_sweep.yml. pplacer_testsuite is the only benchmark
+# confirmed (via the v=0x200 verbose trace, see
+# experiments/auto-compact-tuning/worklog.md Phase 2) to clear
+# socaml-auto-compact's 8MB-chunk heap-size gate at all (its peak heap,
+# ~6.46M words, exceeds the 2.1M-word / 16MB floor; owl_gc and zarith_pi do
+# not). Its actual overhead was measured at only ~8% at O=20 ("not
+# compacting"), so this sweep goes much lower than the owl_gc sweep to find
+# where it actually starts firing.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-pplacer:
+      - pplacer_testsuite
+
+runtimes:
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  socaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+
+modifiers:
+  O:
+    type: OCamlRunParam
+    val: "O={0}"
+
+configs:
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact|perf_grp1|re-25|md-2"
+
+config_sweep:
+  O: [1, 2, 5, 10, 20, 50, 100]

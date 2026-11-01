@@ -1,0 +1,23 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5-fp (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-fp                  1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact-fp         1.008x    1.002x    0.750x    1.249x    0.499x   (n=29/29)
+
+max RSS ratio vs. ocaml-5.5-fp (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-fp                  1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact-fp         1.003x    1.000x    0.988x    1.038x    0.050x   (n=29/29)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-fp                   28.5%     21.6%      0.0%     94.8%     94.8%   (n=29/29)
+ocaml-auto-compact-fp          29.0%     21.6%      0.0%     94.7%     94.7%   (n=29/29)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-fp                       0         0         0         0         0   (n=29/29)
+ocaml-auto-compact-fp            924         0         0     26806     26806   (n=29/29)
+

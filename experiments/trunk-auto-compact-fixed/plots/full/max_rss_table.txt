@@ -1,0 +1,33 @@
+Max RSS (MB), per benchmark, vs. ocaml-5.5
+==========================================
+
+benchmark                            ocaml-5.5    ocaml-auto-compact           ocaml-5.5.1           ocaml-trunkocaml-auto-compact-trunk
+alt_ergo_fill                    930.6MB (ref)       930.5MB (-0.0%)       930.2MB (-0.0%)       943.7MB (+1.4%)       943.6MB (+1.4%)
+alt_ergo_unsat_smt2               79.5MB (ref)        79.7MB (+0.2%)        79.4MB (-0.1%)        80.9MB (+1.8%)        81.3MB (+2.3%)
+alt_ergo_yyll                    285.8MB (ref)       285.8MB (+0.0%)       285.6MB (-0.1%)       286.5MB (+0.3%)       286.8MB (+0.3%)
+coqc_corelib_stress             1085.3MB (ref)      1084.9MB (-0.0%)      1085.1MB (-0.0%)      1084.8MB (-0.0%)      1081.2MB (-0.4%)
+cpdf_blacktext                   244.1MB (ref)       244.1MB (-0.0%)       243.7MB (-0.2%)       251.9MB (+3.2%)       251.7MB (+3.1%)
+cpdf_merge                       363.4MB (ref)       361.5MB (-0.5%)       362.1MB (-0.4%)       368.1MB (+1.3%)       366.3MB (+0.8%)
+cpdf_scale                       489.8MB (ref)       488.5MB (-0.3%)       489.8MB (+0.0%)       482.6MB (-1.5%)       481.8MB (-1.6%)
+cpdf_squeeze                     328.6MB (ref)       328.5MB (-0.0%)       328.6MB (+0.0%)       338.8MB (+3.1%)       338.9MB (+3.1%)
+devkit_gzip                       18.1MB (ref)        18.0MB (-0.5%)        18.1MB (+0.0%)        18.4MB (+1.4%)        18.3MB (+0.9%)
+eio_fiber_stream                  32.5MB (ref)        32.4MB (-0.3%)        32.5MB (-0.1%)        32.7MB (+0.8%)        32.8MB (+1.1%)
+frama_c_eva_sqlite               638.3MB (ref)       638.3MB (+0.0%)       638.3MB (+0.0%)       641.3MB (+0.5%)       642.7MB (+0.7%)
+frama_c_eva_t                     92.3MB (ref)        92.2MB (-0.1%)        92.1MB (-0.2%)        94.8MB (+2.7%)        93.5MB (+1.3%)
+goblint                           44.5MB (ref)        44.4MB (-0.1%)        44.5MB (+0.0%)        45.5MB (+2.4%)        45.7MB (+2.8%)
+infer_default                     38.3MB (ref)        38.9MB (+1.5%)        38.5MB (+0.6%)        42.1MB (+9.9%)                    --
+irmin_mem_rw                      36.0MB (ref)        36.0MB (+0.1%)        35.9MB (-0.2%)        36.9MB (+2.5%)        37.0MB (+2.9%)
+jsoo                             261.7MB (ref)       261.4MB (-0.1%)       258.1MB (-1.3%)       284.2MB (+8.6%)       284.1MB (+8.6%)
+liq_parse_typecheck               48.6MB (ref)        48.6MB (+0.0%)        48.5MB (-0.2%)        50.7MB (+4.3%)        50.7MB (+4.4%)
+liq_video_frames_pool            109.9MB (ref)       109.9MB (+0.0%)       109.9MB (+0.0%)       110.6MB (+0.6%)       110.7MB (+0.7%)
+menhir_ocamly                   2697.5MB (ref)      2704.0MB (+0.2%)      2686.1MB (-0.4%)      2696.7MB (-0.0%)      2694.3MB (-0.1%)
+menhir_sql_parser                319.7MB (ref)       319.8MB (+0.0%)       319.7MB (+0.0%)       320.0MB (+0.1%)       320.1MB (+0.1%)
+menhir_sysver                    746.8MB (ref)       747.1MB (+0.0%)       747.1MB (+0.0%)       723.4MB (-3.1%)       748.0MB (+0.2%)
+ocamlc_self_compile              987.4MB (ref)       988.8MB (+0.1%)       985.6MB (-0.2%)       991.0MB (+0.4%)       998.0MB (+1.1%)
+ocamlformat_rocq                 277.4MB (ref)       277.1MB (-0.1%)       277.0MB (-0.1%)       302.5MB (+9.1%)       301.9MB (+8.8%)
+owl_gc                           126.0MB (ref)       128.8MB (+2.2%)       125.9MB (-0.1%)      139.9MB (+11.0%)      142.4MB (+13.0%)
+pplacer_testsuite                 69.6MB (ref)        69.9MB (+0.4%)        70.0MB (+0.6%)        70.2MB (+0.9%)        70.3MB (+1.0%)
+sedlex_tokenize                  963.0MB (ref)       963.0MB (+0.0%)       962.7MB (-0.0%)       963.4MB (+0.0%)       963.5MB (+0.0%)
+test_decompress                   15.0MB (ref)        15.1MB (+0.7%)        15.6MB (+3.9%)        16.2MB (+8.1%)        16.1MB (+7.6%)
+ydump_repeat                      11.1MB (ref)        11.2MB (+0.2%)        11.4MB (+2.8%)        11.9MB (+6.4%)        11.5MB (+3.6%)
+zarith_pi                        126.9MB (ref)       127.0MB (+0.1%)       126.8MB (-0.1%)       136.4MB (+7.5%)       136.2MB (+7.4%)

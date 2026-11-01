@@ -1,0 +1,102 @@
+# =============================================================================
+# 5.5 vs. 5.5.1 vs. trunk, with/without automatic compaction
+# =============================================================================
+# Extends the original 4-way compactor-comparison (ocaml-5.5 / ocaml-auto-
+# compact / socaml / socaml-auto-compact) with a version-freshness axis: does
+# the auto-compact-tuning investigation's finding (compaction is real but the
+# compiled-in default threshold is too aggressive -- see
+# experiments/auto-compact-tuning/worklog.md) still hold on newer OCaml, and
+# has anything upstream changed the picture between 5.5.0, 5.5.1, and trunk?
+#
+# Five runtimes:
+#   ocaml-5.5              : stock OCaml 5.5.0 (opam-compiler, official tag)
+#   ocaml-auto-compact     : OCaml 5.5.0 + automatic compaction
+#                             (curche/ocaml branch auto-compact-5.5)
+#   ocaml-5.5.1            : stock OCaml 5.5.1 (opam-compiler, official tag)
+#   ocaml-trunk            : stock OCaml trunk, pinned to curche/ocaml's
+#                             mirror of upstream trunk @ eba18e50be (fetched
+#                             2026-09-09 -- pinned rather than tracking the
+#                             branch tip, so results stay reproducible)
+#   ocaml-auto-compact-trunk : the auto-compact-5.5 patch (2 commits:
+#                             "Port automatic compaction from OxCaml" +
+#                             version string) cherry-picked onto the SAME
+#                             eba18e50be trunk snapshot. Two real conflicts
+#                             (runtime/gc_ctrl.c's caml_runtime_parameters
+#                             format string colliding with an unrelated
+#                             upstream `R=` addition; runtime/startup_aux.c's
+#                             OCAMLRUNPARAM parser having been refactored
+#                             into a separate caml_parse_startup_params()
+#                             function upstream) -- resolved by hand, see the
+#                             branch `auto-compact-trunk` in
+#                             ocaml-compiler/ocaml-git for the two commits.
+#                             major_gc.c itself (should_compact_from_stw_single
+#                             and its call sites) merged cleanly despite 52
+#                             trunk commits since the 5.5.0 base touching that
+#                             file, including an "Idle phase" GC refactor --
+#                             confirmed by inspection that the compaction gate
+#                             (`mode != Slice_opportunistic &&
+#                             is_complete_last_phase()`) is structurally
+#                             unchanged, just renamed.
+#                             NOT pushed to GitHub (no push credentials on
+#                             this machine) -- built locally to
+#                             /home/curche/opt/ocaml-auto-compact-trunk and
+#                             referenced here via `executable:` instead of
+#                             `repo:`/`commit:`, same pattern as the
+#                             auto-compact-tuning chunk-knob experiment.
+#
+# Full macro-benches suite (macro_base.yml's default `benchmarks:` mapping,
+# no override), 3 invocations, matching the original compactor-comparison's
+# scope. Plotting reuses compactor-comparison/plot_results.py verbatim (a
+# generic benchmark x runtime heatmap/summary tool) -- copied here rather
+# than run cross-directory, so this experiment stays self-contained.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+
+  ocaml-5.5.1:
+    type: OCaml
+    version: "5.5.1"
+
+  ocaml-trunk:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "eba18e50bed58cbf5d3e0071e9528a492eda8ac9"
+
+  ocaml-auto-compact-trunk:
+    type: OCaml
+    executable: "/home/curche/opt/ocaml-auto-compact-trunk/bin/ocaml"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "ocaml-5.5.1|perf_grp1|re-25|md-2"
+  - "ocaml-trunk|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-trunk|perf_grp1|re-25|md-2"
+
+comparisons:
+  - label: "auto-compaction alone, on 5.5.0"
+    a: ocaml-5.5
+    b: ocaml-auto-compact
+  - label: "patch release alone (5.5.0 -> 5.5.1, no auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-5.5.1
+  - label: "version freshness alone (5.5.0 -> trunk, no auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-trunk
+  - label: "auto-compaction alone, on trunk"
+    a: ocaml-trunk
+    b: ocaml-auto-compact-trunk
+  - label: "combined effect (5.5.0 stock -> trunk + auto-compact)"
+    a: ocaml-5.5
+    b: ocaml-auto-compact-trunk

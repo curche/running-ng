@@ -1,0 +1,72 @@
+# =============================================================================
+# Gap-fill run -- backfills stale-artifact gaps found in the full `run`.
+# =============================================================================
+# The full 8-way run left 11 (benchmark, runtime) cells missing, all on the
+# 4 PRE-EXISTING switches (ocaml-5.5, ocaml-5.5-falign, ocaml-auto-compact,
+# ocaml-auto-compact-falign -- built weeks before this experiment, in TASK
+# 0/1), never on the 4 fresh frame-pointer switches this experiment built.
+# Root cause (see worklog.md Phase 1): stale build wrappers/dune caches
+# from before macro-benches added/fixed these benchmarks (jsoo, frama-c,
+# infer, liq-video-frames, devkit's PCRE1 vendor fix) -- the wrapper
+# scripts existed (so running-ng skipped rebuilding) but pointed at
+# binaries dune never produced in that stale state. Fixed by deleting the
+# stale wrappers/caches (forcing a real rebuild); this config reruns
+# exactly the affected suites on exactly the affected runtimes.
+#
+# A handful of cells here are redundant (already have good data) --
+# harmless, just re-generates a file we don't need to merge. Deliberately
+# NOT included: devkit_htmlstream / devkit_stre / devkit_network on the
+# falign runtimes. Their *build* failure is fixed by the same dune-cache
+# clear (folded into `macro-devkit` here via devkit_gzip triggering a
+# fresh duniverse/pcre-ocaml build), but they still fail at RUNTIME on
+# EVERY runtime (a separate, suite-wide `libpcre.so.1` LD_LIBRARY_PATH
+# packaging bug in ahrefs-devkit.build.sh, unrelated to this experiment's
+# falign/fp/auto-compact axes) -- see results.md "Known gaps". Rerunning
+# them here would not produce data, so they're left out to save time.
+#
+# Usage: `make gapfill` from this directory.
+# =============================================================================
+
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  benchmarks:
+    macro-frama-c-monorepo:
+      - frama_c_eva_t
+      - frama_c_eva_sqlite
+    macro-jsoo:
+      - jsoo
+    macro-liq-video-frames:
+      - liq_video_frames_pool
+    macro-infer:
+      - infer_default
+    macro-devkit:
+      - devkit_gzip
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+  ocaml-auto-compact:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+  ocaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"

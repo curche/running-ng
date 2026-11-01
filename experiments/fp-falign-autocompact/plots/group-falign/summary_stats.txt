@@ -1,0 +1,23 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5-falign (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-falign              1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact-falign     0.999x    1.000x    0.750x    1.251x    0.501x   (n=29/29)
+
+max RSS ratio vs. ocaml-5.5-falign (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-falign              1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-auto-compact-falign     1.001x    1.000x    0.990x    1.023x    0.032x   (n=29/29)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-falign               29.1%     22.1%      0.0%     94.8%     94.8%   (n=29/29)
+ocaml-auto-compact-falign      29.6%     22.1%      0.0%     95.3%     95.3%   (n=29/29)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5-falign                   0         0         0         0         0   (n=29/29)
+ocaml-auto-compact-falign        924         0         0     26806     26806   (n=29/29)
+

@@ -1,0 +1,17 @@
+CONFIG: !!python/object/apply:pathlib.PosixPath
+- src/running/config/experiments/infer_O_sweep.yml
+LOG_DIR: !!python/object/apply:pathlib.PosixPath
+- experiments/auto-compact-tuning/logs/infer_O_sweep
+N: null
+dry_run: false
+id_prefix: null
+invocations: null
+minheap_multiplier: null
+n: []
+resume: null
+skip_oom: null
+skip_timeout: null
+slice: null
+verbose: false
+which: runbms
+workdir: null

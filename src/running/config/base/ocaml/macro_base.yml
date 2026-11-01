@@ -262,6 +262,24 @@ suites:
         build_script: "zarith.build.sh"
         args: "15000"
 
+  # Added locally (not upstream in this repo's original base config) —
+  # macro-benches added `infer` after this file was last synced. infer is
+  # Meta's Java static analyzer, run via `infer analyze --multicore` (the
+  # suite's first true multi-domain shared-heap workload). Its wrapper is
+  # self-contained (no CLI args — rung selection happens at build time via
+  # the output filename). Cold first-run capture + analysis is ~2-2.5x the
+  # documented warm wall (~16s at -j12 for infer_default), so timeout is
+  # generous. NOT buildable on socaml/socaml-auto-compact — hits the same
+  # pre-existing ppxlib/AST version-skew failure as several other suites.
+  macro-infer:
+    type: OCamlBenchmarkSuite
+    timeout: 300
+    programs:
+      infer_default:
+        path: "${RUNNING_MACRO_BENCH_DIR}/benchmarks/infer"
+        build_script: "infer.build.sh"
+        args: ""
+
   macro-owl:
     type: OCamlBenchmarkSuite
     timeout: 120
@@ -608,6 +626,9 @@ benchmarks:
 
   macro-owl:
     - owl_gc
+
+  macro-infer:
+    - infer_default
 
   macro-ocamlc-self-compile:
     - ocamlc_self_compile

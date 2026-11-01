@@ -1,0 +1,27 @@
+# started on Wed Sep  9 15:01:53 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/pplacer/pplacer_testsuite-ocaml-5.5 5':
+
+         10,157.50 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    40,509,305,958      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+   133,821,745,192      cpu_core/instructions/                                                
+           115,216      page-faults                                                           
+           115,216      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+     1,571,031,309      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+        28,743,786      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+        12,195,029      cpu_core/dTLB-load-misses/                                            
+               112      context-switches                                                      
+
+      10.161766272 seconds time elapsed
+
+      10.015436000 seconds user
+       0.144355000 seconds sys
+
+

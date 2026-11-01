@@ -1,0 +1,3 @@
+Fatal error: exception Unix.Unix_error(Unix.ENOMEM, "io_uring_queue_init", "")
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.018 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/eio_fiber_stream__ocaml-5.5.rep1.data (4 samples) ]

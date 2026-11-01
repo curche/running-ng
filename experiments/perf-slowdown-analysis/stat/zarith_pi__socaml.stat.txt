@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:55:46 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/zarith/zarith_pi-socaml 15000':
+
+          3,298.90 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    13,163,810,280      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    36,753,092,771      cpu_core/instructions/                                                
+           586,712      page-faults                                                           
+           586,712      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+        16,997,542      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+           456,221      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+         1,461,969      cpu_core/dTLB-load-misses/                                            
+                39      context-switches                                                      
+
+       3.300059107 seconds time elapsed
+
+       2.845529000 seconds user
+       0.453924000 seconds sys
+
+

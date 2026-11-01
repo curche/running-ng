@@ -1,0 +1,37 @@
+# =============================================================================
+# Gap-fill round 2 -- devkit_gzip on the 2 falign runtimes only.
+# =============================================================================
+# Round 1's fix (deleting just `_build-*/default/duniverse/pcre-ocaml`) left
+# dune's own incremental-build digest database out of sync with the
+# filesystem -- dune expects.sexp files it can no longer find, producing a
+# hard IO error instead of regenerating them. Fixed by deleting the entire
+# `_build-ocaml-5.5-falign` / `_build-ocaml-auto-compact-falign` directories
+# (matches macro-benches' own `make clean` pattern) so dune starts these two
+# runtimes' devkit build from a clean, consistent state. See worklog.md.
+# =============================================================================
+
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  benchmarks:
+    macro-devkit:
+      - devkit_gzip
+
+runtimes:
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+  ocaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"

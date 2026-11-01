@@ -1,0 +1,24 @@
+# Rebuilds frama_c_eva_sqlite and owl_gc for ocaml-5.5-falign (reused
+# switch), whose _build dir was deleted and only partially rebuilt (pplacer
+# only) during ../pplacer-falign-deep-dive/. Same class of bug as TASK 3's
+# gapfill/gapfill2 -- see worklog.md.
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-frama-c-monorepo:
+      - frama_c_eva_sqlite
+    macro-owl:
+      - owl_gc
+
+runtimes:
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"

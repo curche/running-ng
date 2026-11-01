@@ -1,0 +1,35 @@
+Full-suite O= sweep -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. that benchmark's own O=600 (average / median / range across benchmarks):
+O=               avg    median       min       max     range
+O=600         1.000x    1.000x    1.000x    1.000x    0.000x
+O=700         1.001x    1.000x    0.787x    1.166x    0.379x
+O=800         1.003x    1.000x    0.789x    1.171x    0.383x
+O=900         0.991x    1.000x    0.750x    1.171x    0.421x
+O=1000        0.994x    1.000x    0.787x    1.103x    0.316x
+
+gc_overhead %% (raw, across benchmarks):
+O=               avg    median       min       max     range
+O=600          26.2%     23.7%      0.0%     80.2%     80.2%
+O=700          25.6%     23.5%      0.0%     80.3%     80.3%
+O=800          25.6%     23.8%      0.0%     80.3%     80.3%
+O=900          25.6%     23.8%      0.0%     80.2%     80.2%
+O=1000         25.6%     23.8%      0.0%     80.3%     80.3%
+
+compactions (raw, across benchmarks):
+O=               avg    median       min       max     range
+O=600           1218         0         0     26806     26806
+O=700              1         0         0        14        14
+O=800              0         0         0         0         0
+O=900              0         0         0         0         0
+O=1000             0         0         0         0         0
+
+max RSS MB (raw, across benchmarks):
+O=               avg    median       min       max     range
+O=600            419       261        11      2697      2686
+O=700            419       260        11      2703      2692
+O=800            418       261        11      2693      2681
+O=900            418       261        11      2682      2671
+O=1000           419       261        11      2705      2694
+

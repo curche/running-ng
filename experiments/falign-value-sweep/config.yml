@@ -1,0 +1,79 @@
+# =============================================================================
+# falign value sweep -- does a smaller -falign-functions value fix pplacer
+# without losing frama_c_eva_sqlite/menhir_sql_parser's wins?
+# =============================================================================
+# Follow-up to ../pplacer-falign-deep-dive/, which confirmed falign=64's cost
+# on pplacer_testsuite is a front-end fetch/decode-bandwidth tax from padding
+# every function -- raw padding volume, not layout luck. That mechanism
+# predicts a SMALLER alignment value should directly reduce the regression.
+# This sweep tests falign in {16, 32, 64} against stock on:
+#   - pplacer_testsuite   -- the regressed benchmark (falign64: +3.2%)
+#   - frama_c_eva_sqlite  -- falign64's biggest win (-43.1%)
+#   - menhir_sql_parser   -- falign64's second-biggest win (-11.5%)
+#   - menhir_ocamly       -- another falign64 win (-4.0%)
+#   - owl_gc, zarith_pi   -- flat/control benchmarks (falign64: ~0%), to
+#     confirm smaller alignment doesn't regress benchmarks it was neutral on
+#
+# Reuses the existing `ocaml-5.5-falign` switch (already built, = falign64)
+# rather than rebuilding it under a new name.
+#
+# Usage: `make run` from this directory (see Makefile).
+# =============================================================================
+
+includes:
+  - "../../src/running/config/base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 5
+  benchmarks:
+    macro-pplacer:
+      - pplacer_testsuite
+    macro-frama-c-monorepo:
+      - frama_c_eva_sqlite
+    macro-menhir-monorepo:
+      - menhir_sql_parser
+      - menhir_ocamly
+    macro-owl:
+      - owl_gc
+    macro-zarith:
+      - zarith_pi
+
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-5.5-falign16:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=16"
+
+  ocaml-5.5-falign32:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=32"
+
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign16|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign32|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+
+comparisons:
+  - label: "falign=16 vs stock"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign16
+  - label: "falign=32 vs stock"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign32
+  - label: "falign=64 vs stock"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign

@@ -1,0 +1,1166 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="214" onload="init(evt)" viewBox="0 0 1200 214" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="214.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >pplacer_testsuite diff2 (normalized): falign vs stock, widths=falign, red=grew</text>
+<text id="details" x="10.00" y="197" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="197" > </text>
+<g id="frames">
+<g >
+<title>gsl_vector_max (409,953,933 samples, 0.18%; +0.02%)</title><rect x="953.9" y="117" width="2.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="956.94" y="127.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_unlock@@GLIBC_2.2.5 (80,740,434 samples, 0.04%; +0.00%)</title><rect x="107.7" y="117" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="110.69" y="127.5" ></text>
+</g>
+<g >
+<title>ten_pairwise_prod_c (184,512,686 samples, 0.08%; +0.00%)</title><rect x="1186.1" y="133" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1189.07" y="143.5" ></text>
+</g>
+<g >
+<title>do_some_marking (568,148,469 samples, 0.25%; +0.25%)</title><rect x="11.3" y="117" width="3.0" height="15.0" fill="rgb(255,179,179)" rx="2" ry="2" />
+<text  x="14.35" y="127.5" ></text>
+</g>
+<g >
+<title>alloc_custom_gen (251,044,302 samples, 0.11%; +0.02%)</title><rect x="61.9" y="133" width="1.4" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="64.94" y="143.5" ></text>
+</g>
+<g >
+<title>print_trace (178,132,425 samples, 0.08%; -0.01%)</title><rect x="1182.9" y="133" width="1.0" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1185.95" y="143.5" ></text>
+</g>
+<g >
+<title>caml_compare (28,542,330 samples, 0.01%; +0.00%)</title><rect x="25.9" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="28.89" y="127.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_unlock@@GLIBC_2.2.5 (42,051,763 samples, 0.02%; +0.01%)</title><rect x="1184.1" y="133" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="1187.05" y="143.5" ></text>
+</g>
+<g >
+<title>caml_string_compare (117,459,789 samples, 0.05%; +0.01%)</title><rect x="36.6" y="117" width="0.7" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="39.64" y="127.5" ></text>
+</g>
+<g >
+<title>__printf_buffer (301,275,821 samples, 0.13%; -0.03%)</title><rect x="21.6" y="85" width="1.6" height="15.0" fill="rgb(206,206,255)" rx="2" ry="2" />
+<text  x="24.58" y="95.5" ></text>
+</g>
+<g >
+<title>__vsnprintf_internal (39,880,026 samples, 0.02%; 0.00%)</title><rect x="137.1" y="101" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="140.11" y="111.5" ></text>
+</g>
+<g >
+<title>caml_float_of_string (595,898,150 samples, 0.26%; +0.01%)</title><rect x="97.2" y="133" width="3.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="100.22" y="143.5" ></text>
+</g>
+<g >
+<title>dediagonalize (757,651,590 samples, 0.34%; -0.01%)</title><rect x="146.1" y="133" width="3.9" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="149.06" y="143.5" ></text>
+</g>
+<g >
+<title>caml_alloc_sprintf (43,117,019 samples, 0.02%; -0.00%)</title><rect x="137.1" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="140.09" y="127.5" ></text>
+</g>
+<g >
+<title>caml_alloc_small (195,512,668 samples, 0.09%; +0.01%)</title><rect x="64.0" y="133" width="1.0" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="66.99" y="143.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Gaussian_approx.to_xi_p_times_bl_1411 (445,941,120 samples, 0.20%; -0.01%)</title><rect x="16.3" y="117" width="2.4" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="19.34" y="127.5" ></text>
+</g>
+<g >
+<title>_itoa_word (32,433,317 samples, 0.01%; -0.00%)</title><rect x="23.0" y="69" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="25.99" y="79.5" ></text>
+</g>
+<g >
+<title>caml_format_float (22,542,705 samples, 0.01%; +0.00%)</title><rect x="28.6" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="31.60" y="127.5" ></text>
+</g>
+<g >
+<title>caml_create_bytes (26,259,767 samples, 0.01%; +0.01%)</title><rect x="86.9" y="133" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="89.95" y="143.5" ></text>
+</g>
+<g >
+<title>caml_ml_output_bytes (67,915,386 samples, 0.03%; -0.01%)</title><rect x="31.4" y="117" width="0.3" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="34.38" y="127.5" ></text>
+</g>
+<g >
+<title>caml_alloc_string (87,592,811 samples, 0.04%; +0.00%)</title><rect x="75.8" y="133" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="78.77" y="143.5" ></text>
+</g>
+<g >
+<title>caml_string_length (32,288,242 samples, 0.01%; -0.00%)</title><rect x="140.9" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="143.89" y="143.5" ></text>
+</g>
+<g >
+<title>_int_malloc (39,544,185 samples, 0.02%; +0.01%)</title><rect x="77.6" y="101" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="80.56" y="111.5" ></text>
+</g>
+<g >
+<title>caml_ephe_clean.part.0 (26,463,745 samples, 0.01%; +0.01%)</title><rect x="96.2" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="99.25" y="143.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (39,544,185 samples, 0.02%; -0.00%)</title><rect x="77.6" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="80.56" y="127.5" ></text>
+</g>
+<g >
+<title>pow@plt (29,738,060 samples, 0.01%; +0.01%)</title><rect x="60.2" y="117" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="63.22" y="127.5" ></text>
+</g>
+<g >
+<title>caml_ba_update_proxy (208,344,345 samples, 0.09%; -0.02%)</title><rect x="83.5" y="133" width="1.1" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="86.51" y="143.5" ></text>
+</g>
+<g >
+<title>gsl_ran_gaussian (68,702,856 samples, 0.03%; -0.00%)</title><rect x="953.2" y="117" width="0.3" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="956.17" y="127.5" ></text>
+</g>
+<g >
+<title>__vsnprintf_internal (2,001,311,332 samples, 0.89%; +0.00%)</title><rect x="65.3" y="117" width="10.5" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="68.30" y="127.5" ></text>
+</g>
+<g >
+<title>[unknown] (8,844,176,361 samples, 3.92%; +0.01%)</title><rect x="14.3" y="133" width="46.3" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="17.32" y="143.5" >[unk..</text>
+</g>
+<g >
+<title>caml_alloc_sprintf (2,050,038,092 samples, 0.91%; -0.01%)</title><rect x="65.0" y="133" width="10.8" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="68.05" y="143.5" ></text>
+</g>
+<g >
+<title>ten_statd_pairwise_prod_c (160,001,092 samples, 0.07%; +0.00%)</title><rect x="1187.0" y="133" width="0.9" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1190.03" y="143.5" ></text>
+</g>
+<g >
+<title>parse_intnat (58,553,552 samples, 0.03%; -0.00%)</title><rect x="973.5" y="133" width="0.3" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="976.48" y="143.5" ></text>
+</g>
+<g >
+<title>caml_stash_backtrace (144,582,073 samples, 0.06%; -0.02%)</title><rect x="136.6" y="133" width="0.7" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="139.56" y="143.5" ></text>
+</g>
+<g >
+<title>__strlen_avx2 (29,076,372 samples, 0.01%; +0.00%)</title><rect x="75.1" y="69" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="78.15" y="79.5" ></text>
+</g>
+<g >
+<title>__vsnprintf_internal (330,662,441 samples, 0.15%; -0.01%)</title><rect x="21.5" y="101" width="1.7" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="24.46" y="111.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (127,987,452 samples, 0.06%; +0.00%)</title><rect x="26.4" y="117" width="0.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="29.43" y="127.5" ></text>
+</g>
+<g >
+<title>caml_ba_alloc (331,947,952 samples, 0.15%; +0.01%)</title><rect x="76.3" y="133" width="1.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="79.25" y="143.5" ></text>
+</g>
+<g >
+<title>caml_ba_set_aux (24,995,738 samples, 0.01%; -0.01%)</title><rect x="81.1" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="84.13" y="143.5" ></text>
+</g>
+<g >
+<title>caml_alloc_sprintf (392,080,930 samples, 0.17%; +0.01%)</title><rect x="21.1" y="117" width="2.1" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="24.14" y="127.5" ></text>
+</g>
+<g >
+<title>caml_modify (736,289,659 samples, 0.33%; -0.02%)</title><rect x="31.7" y="117" width="3.9" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="34.74" y="127.5" ></text>
+</g>
+<g >
+<title>[libgsl.so.28.0.0] (32,731,619 samples, 0.01%; -0.00%)</title><rect x="953.3" y="101" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="956.30" y="111.5" ></text>
+</g>
+<g >
+<title>caml_alloc_string (210,483,570 samples, 0.09%; -0.01%)</title><rect x="23.2" y="117" width="1.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="26.19" y="127.5" ></text>
+</g>
+<g >
+<title>re_match (77,862,962 samples, 0.03%; +0.00%)</title><rect x="1184.4" y="133" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1187.36" y="143.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (35,973,918 samples, 0.02%; +0.00%)</title><rect x="24.5" y="101" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="27.52" y="111.5" ></text>
+</g>
+<g >
+<title>__mpn_divrem (84,262,381 samples, 0.04%; +0.01%)</title><rect x="72.5" y="53" width="0.4" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="75.48" y="63.5" ></text>
+</g>
+<g >
+<title>caml_ml_output_bytes (521,295,091 samples, 0.23%; -0.01%)</title><rect x="105.4" y="133" width="2.7" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="108.39" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Stack.push_287 (23,090,517 samples, 0.01%; -0.00%)</title><rect x="20.0" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="22.95" y="127.5" ></text>
+</g>
+<g >
+<title>major_collection_slice (23,320,115 samples, 0.01%; -0.02%)</title><rect x="948.7" y="133" width="0.1" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="951.68" y="143.5" ></text>
+</g>
+<g >
+<title>_int_malloc (26,529,308 samples, 0.01%; +0.00%)</title><rect x="136.4" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="139.39" y="111.5" ></text>
+</g>
+<g >
+<title>__mpn_mul_1 (32,446,391 samples, 0.01%; +0.00%)</title><rect x="74.9" y="37" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="77.94" y="47.5" ></text>
+</g>
+<g >
+<title>__frexp (38,506,045 samples, 0.02%; +0.00%)</title><rect x="101.2" y="117" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="104.25" y="127.5" ></text>
+</g>
+<g >
+<title>str_to_mpn.isra.0 (31,837,328 samples, 0.01%; +0.00%)</title><rect x="28.4" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="31.42" y="95.5" ></text>
+</g>
+<g >
+<title>caml_format_int (29,167,036 samples, 0.01%; -0.01%)</title><rect x="28.7" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="31.72" y="127.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (19,969,140 samples, 0.01%; -0.00%)</title><rect x="36.4" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="39.42" y="127.5" ></text>
+</g>
+<g >
+<title>caml_ba_slice (428,615,664 samples, 0.19%; +0.03%)</title><rect x="81.3" y="133" width="2.2" height="15.0" fill="rgb(255,206,206)" rx="2" ry="2" />
+<text  x="84.27" y="143.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (19,393,133 samples, 0.01%; +0.01%)</title><rect x="21.0" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="24.04" y="111.5" ></text>
+</g>
+<g >
+<title>caml_ba_finalize (318,762,392 samples, 0.14%; +0.00%)</title><rect x="78.1" y="133" width="1.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="81.10" y="143.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_trylock@@GLIBC_2.34 (19,418,392 samples, 0.01%; +0.01%)</title><rect x="60.4" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="63.37" y="127.5" ></text>
+</g>
+<g >
+<title>do_some_marking (3,945,404,182 samples, 1.75%; +1.75%)</title><rect x="38.5" y="117" width="20.6" height="15.0" fill="rgb(255,0,0)" rx="2" ry="2" />
+<text  x="41.47" y="127.5" ></text>
+</g>
+<g >
+<title>caml_alloc_custom_mem (84,872,316 samples, 0.04%; -0.01%)</title><rect x="63.4" y="133" width="0.4" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="66.39" y="143.5" ></text>
+</g>
+<g >
+<title>tests.exe (225,442,910,984 samples, 99.99%; 0.00%)</title><rect x="10.1" y="149" width="1179.9" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.08" y="159.5" >tests.exe</text>
+</g>
+<g >
+<title>caml_blit_string (46,092,949 samples, 0.02%; -0.00%)</title><rect x="24.7" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="27.71" y="127.5" ></text>
+</g>
+<g >
+<title>__ieee754_pow_fma (301,887,246 samples, 0.13%; +0.00%)</title><rect x="17.0" y="85" width="1.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="20.01" y="95.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (32,352,463 samples, 0.01%; -0.02%)</title><rect x="77.8" y="117" width="0.1" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="80.77" y="127.5" ></text>
+</g>
+<g >
+<title>__printf_buffer (1,971,849,322 samples, 0.87%; -0.05%)</title><rect x="65.4" y="101" width="10.3" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="68.42" y="111.5" ></text>
+</g>
+<g >
+<title>exp@@GLIBC_2.29 (19,820,814 samples, 0.01%; +0.00%)</title><rect x="10.1" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="13.13" y="127.5" ></text>
+</g>
+<g >
+<title>caml_parse_engine (935,897,830 samples, 0.42%; -0.08%)</title><rect x="113.2" y="133" width="4.9" height="15.0" fill="rgb(200,200,255)" rx="2" ry="2" />
+<text  x="116.24" y="143.5" ></text>
+</g>
+<g >
+<title>__printf_fp_l_buffer (1,742,223,953 samples, 0.77%; +0.01%)</title><rect x="66.2" y="85" width="9.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="69.25" y="95.5" ></text>
+</g>
+<g >
+<title>pool_sweep (39,919,504,142 samples, 17.71%; -0.43%)</title><rect x="974.0" y="133" width="208.9" height="15.0" fill="rgb(158,158,255)" rx="2" ry="2" />
+<text  x="976.98" y="143.5" >pool_sweep</text>
+</g>
+<g >
+<title>memcpy@plt (26,454,849 samples, 0.01%; +0.01%)</title><rect x="952.5" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="955.53" y="143.5" ></text>
+</g>
+<g >
+<title>caml_uniform_array_make (76,230,848 samples, 0.03%; +0.03%)</title><rect x="37.7" y="117" width="0.4" height="15.0" fill="rgb(255,206,206)" rx="2" ry="2" />
+<text  x="40.67" y="127.5" ></text>
+</g>
+<g >
+<title>caml_fill_bytes (29,068,855 samples, 0.01%; -0.00%)</title><rect x="26.3" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="29.26" y="127.5" ></text>
+</g>
+<g >
+<title>caml_uniform_array_make (131,624,095 samples, 0.06%; -0.04%)</title><rect x="142.9" y="133" width="0.7" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="145.89" y="143.5" ></text>
+</g>
+<g >
+<title>caml_lex_engine (527,226,930 samples, 0.23%; -0.00%)</title><rect x="101.8" y="133" width="2.8" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="104.80" y="143.5" ></text>
+</g>
+<g >
+<title>compare_val (312,524,384 samples, 0.14%; +0.00%)</title><rect x="144.4" y="133" width="1.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="147.43" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Lexing.engine_307 (48,389,649 samples, 0.02%; +0.00%)</title><rect x="19.2" y="117" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="22.18" y="127.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (29,326,128 samples, 0.01%; -0.00%)</title><rect x="61.0" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="64.01" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.String.compare_1038 (77,681,756 samples, 0.03%; -0.01%)</title><rect x="20.1" y="117" width="0.4" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="23.08" y="127.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (39,376,357 samples, 0.02%; +0.00%)</title><rect x="20.6" y="117" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="23.60" y="127.5" ></text>
+</g>
+<g >
+<title>__mpn_rshift (25,976,688 samples, 0.01%; -0.00%)</title><rect x="73.9" y="53" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="76.90" y="63.5" ></text>
+</g>
+<g >
+<title>ml_gsl_ran_gaussian (111,118,313 samples, 0.05%; +0.01%)</title><rect x="952.9" y="133" width="0.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="955.94" y="143.5" ></text>
+</g>
+<g >
+<title>caml_stash_backtrace (22,512,357 samples, 0.01%; +0.00%)</title><rect x="36.5" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="39.53" y="127.5" ></text>
+</g>
+<g >
+<title>pow@@GLIBC_2.29 (22,912,820 samples, 0.01%; +0.00%)</title><rect x="60.1" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="63.10" y="127.5" ></text>
+</g>
+<g >
+<title>__uselocale (25,971,230 samples, 0.01%; +0.00%)</title><rect x="100.4" y="117" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="103.44" y="127.5" ></text>
+</g>
+<g >
+<title>gsl_vector_max (86,216,272 samples, 0.04%; -0.04%)</title><rect x="948.0" y="133" width="0.4" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="950.99" y="143.5" ></text>
+</g>
+<g >
+<title>parse_sign_and_base (38,729,000 samples, 0.02%; +0.01%)</title><rect x="973.8" y="133" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="976.78" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Parsing.loop_528 (45,505,784 samples, 0.02%; +0.00%)</title><rect x="11.0" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="14.00" y="143.5" ></text>
+</g>
+<g >
+<title>__printf_fp_buffer_1.isra.0 (1,593,052,366 samples, 0.71%; -0.00%)</title><rect x="66.8" y="69" width="8.3" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="69.81" y="79.5" ></text>
+</g>
+<g >
+<title>hack_digit (168,587,373 samples, 0.07%; -0.02%)</title><rect x="74.2" y="53" width="0.9" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="77.23" y="63.5" ></text>
+</g>
+<g >
+<title>__printf_buffer (39,880,026 samples, 0.02%; +0.01%)</title><rect x="137.1" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="140.11" y="95.5" ></text>
+</g>
+<g >
+<title>Stdlib.Queue.take_opt_312 (19,369,032 samples, 0.01%; -0.00%)</title><rect x="19.8" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="22.82" y="127.5" ></text>
+</g>
+<g >
+<title>ephe_mark (46,478,968 samples, 0.02%; +0.00%)</title><rect x="899.7" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="902.70" y="143.5" ></text>
+</g>
+<g >
+<title>memcmp@plt (48,784,437 samples, 0.02%; -0.01%)</title><rect x="952.3" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="955.28" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Lexing.engine_307 (57,731,361 samples, 0.03%; +0.01%)</title><rect x="10.7" y="133" width="0.3" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="13.70" y="143.5" ></text>
+</g>
+<g >
+<title>caml_copy_string (26,471,930 samples, 0.01%; -0.00%)</title><rect x="86.8" y="133" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="89.81" y="143.5" ></text>
+</g>
+<g >
+<title>caml_c_call (178,477,313 samples, 0.08%; -0.02%)</title><rect x="84.8" y="133" width="0.9" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="87.77" y="143.5" ></text>
+</g>
+<g >
+<title>__mpn_lshift (22,492,613 samples, 0.01%; +0.00%)</title><rect x="99.5" y="101" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="102.49" y="111.5" ></text>
+</g>
+<g >
+<title>__mpn_divrem (42,029,139 samples, 0.02%; -0.01%)</title><rect x="74.7" y="37" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="77.72" y="47.5" ></text>
+</g>
+<g >
+<title>__libc_malloc2 (26,529,308 samples, 0.01%; -0.00%)</title><rect x="136.4" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="139.39" y="127.5" ></text>
+</g>
+<g >
+<title>do_some_marking (143,237,799,416 samples, 63.53%; -0.95%)</title><rect x="150.0" y="133" width="749.7" height="15.0" fill="rgb(95,95,255)" rx="2" ry="2" />
+<text  x="153.03" y="143.5" >do_some_marking</text>
+</g>
+<g >
+<title>pthread_mutex_trylock@plt (22,644,255 samples, 0.01%; -0.00%)</title><rect x="1183.9" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1186.93" y="143.5" ></text>
+</g>
+<g >
+<title>oldify_one (2,200,880,289 samples, 0.98%; -0.04%)</title><rect x="962.0" y="133" width="11.5" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="964.96" y="143.5" ></text>
+</g>
+<g >
+<title>__strlen_avx2 (19,841,164 samples, 0.01%; -0.01%)</title><rect x="86.8" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="89.84" y="127.5" ></text>
+</g>
+<g >
+<title>__GI_____strtod_l_internal (467,478,029 samples, 0.21%; +0.01%)</title><rect x="97.9" y="117" width="2.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="100.89" y="127.5" ></text>
+</g>
+<g >
+<title>caml_frexp_float (167,570,938 samples, 0.07%; -0.02%)</title><rect x="100.6" y="133" width="0.8" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="103.57" y="143.5" ></text>
+</g>
+<g >
+<title>caml_hash (38,936,717 samples, 0.02%; -0.01%)</title><rect x="28.9" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="31.90" y="127.5" ></text>
+</g>
+<g >
+<title>BatList.loop_853 (26,036,387 samples, 0.01%; -0.01%)</title><rect x="16.2" y="117" width="0.1" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="19.18" y="127.5" ></text>
+</g>
+<g >
+<title>Stdlib.Queue.add_290 (38,964,944 samples, 0.02%; -0.00%)</title><rect x="19.6" y="117" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="22.62" y="127.5" ></text>
+</g>
+<g >
+<title>str_to_mpn.isra.0 (45,184,358 samples, 0.02%; -0.01%)</title><rect x="100.1" y="101" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="103.10" y="111.5" ></text>
+</g>
+<g >
+<title>caml_blit_bytes (63,423,882 samples, 0.03%; -0.01%)</title><rect x="24.4" y="117" width="0.3" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="27.37" y="127.5" ></text>
+</g>
+<g >
+<title>caml_scan_global_roots (1,439,907,708 samples, 0.64%; -0.00%)</title><rect x="118.9" y="133" width="7.5" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="121.86" y="143.5" ></text>
+</g>
+<g >
+<title>commit_major_slice_work (135,407,273 samples, 0.06%; -0.01%)</title><rect x="143.7" y="133" width="0.7" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="146.72" y="143.5" ></text>
+</g>
+<g >
+<title>oldify_mopup (1,089,698,958 samples, 0.48%; +0.02%)</title><rect x="956.3" y="133" width="5.7" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="959.25" y="143.5" ></text>
+</g>
+<g >
+<title>compare_val (62,967,325 samples, 0.03%; +0.01%)</title><rect x="38.1" y="117" width="0.4" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="41.12" y="127.5" ></text>
+</g>
+<g >
+<title>caml_stw_empty_minor_heap_no_major_slice (202,538,695 samples, 0.09%; +0.02%)</title><rect x="141.1" y="133" width="1.1" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="144.09" y="143.5" ></text>
+</g>
+<g >
+<title>__mpn_mul_1 (113,304,079 samples, 0.05%; -0.01%)</title><rect x="73.3" y="53" width="0.6" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="76.31" y="63.5" ></text>
+</g>
+<g >
+<title>caml_string_compare (671,639,498 samples, 0.30%; -0.02%)</title><rect x="137.4" y="133" width="3.5" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="140.36" y="143.5" ></text>
+</g>
+<g >
+<title>caml_shared_try_alloc (1,912,409,263 samples, 0.85%; +0.04%)</title><rect x="126.5" y="133" width="10.0" height="15.0" fill="rgb(255,205,205)" rx="2" ry="2" />
+<text  x="129.52" y="143.5" ></text>
+</g>
+<g >
+<title>mark (23,371,411 samples, 0.01%; -0.01%)</title><rect x="948.8" y="133" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="951.82" y="143.5" ></text>
+</g>
+<g >
+<title>__mpn_mul (45,278,521 samples, 0.02%; -0.00%)</title><rect x="73.1" y="53" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="76.07" y="63.5" ></text>
+</g>
+<g >
+<title>__strchrnul_avx2 (26,072,164 samples, 0.01%; -0.00%)</title><rect x="22.9" y="69" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="25.85" y="79.5" ></text>
+</g>
+<g >
+<title>caml_parse_engine (131,313,906 samples, 0.06%; -0.00%)</title><rect x="35.6" y="117" width="0.7" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="38.59" y="127.5" ></text>
+</g>
+<g >
+<title>oldify_one (19,851,617 samples, 0.01%; -0.01%)</title><rect x="59.5" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="62.51" y="127.5" ></text>
+</g>
+<g >
+<title>caml_greaterthan (19,123,106 samples, 0.01%; +0.00%)</title><rect x="101.6" y="133" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="104.57" y="143.5" ></text>
+</g>
+<g >
+<title>round_and_return (34,728,515 samples, 0.02%; +0.00%)</title><rect x="28.2" y="85" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="31.23" y="95.5" ></text>
+</g>
+<g >
+<title>ten_bounded_logdot_c (205,046,205 samples, 0.09%; +0.01%)</title><rect x="1185.0" y="133" width="1.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1187.99" y="143.5" ></text>
+</g>
+<g >
+<title>caml_find_frame_descr (122,080,389 samples, 0.05%; -0.02%)</title><rect x="96.6" y="133" width="0.6" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="99.58" y="143.5" ></text>
+</g>
+<g >
+<title>caml_putblock (94,478,704 samples, 0.04%; -0.02%)</title><rect x="118.2" y="133" width="0.5" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="121.18" y="143.5" ></text>
+</g>
+<g >
+<title>caml_format_float (45,301,906 samples, 0.02%; +0.01%)</title><rect x="100.3" y="133" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="103.33" y="143.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Diagd.multi_exp_872 (19,820,814 samples, 0.01%; 0.00%)</title><rect x="10.1" y="133" width="0.1" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.13" y="143.5" ></text>
+</g>
+<g >
+<title>caml_scan_stack (23,034,282 samples, 0.01%; +0.01%)</title><rect x="126.4" y="133" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="129.40" y="143.5" ></text>
+</g>
+<g >
+<title>gemmish_c (9,136,712,540 samples, 4.05%; -0.15%)</title><rect x="900.1" y="133" width="47.9" height="15.0" fill="rgb(191,191,255)" rx="2" ry="2" />
+<text  x="903.13" y="143.5" >gemm..</text>
+</g>
+<g >
+<title>__memcmp_avx2_movbe (301,160,374 samples, 0.13%; +0.01%)</title><rect x="139.3" y="117" width="1.6" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="142.30" y="127.5" ></text>
+</g>
+<g >
+<title>ml_gsl_vector_max (486,422,333 samples, 0.22%; +0.00%)</title><rect x="953.5" y="133" width="2.6" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="956.54" y="143.5" ></text>
+</g>
+<g >
+<title>caml_lex_engine (419,043,662 samples, 0.19%; +0.00%)</title><rect x="29.2" y="117" width="2.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="32.19" y="127.5" ></text>
+</g>
+<g >
+<title>caml_copy_double (180,890,072 samples, 0.08%; +0.02%)</title><rect x="85.9" y="133" width="0.9" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="88.86" y="143.5" ></text>
+</g>
+<g >
+<title>caml_alloc_initialized_string (35,585,182 samples, 0.02%; +0.00%)</title><rect x="21.0" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="23.96" y="127.5" ></text>
+</g>
+<g >
+<title>Dune.exe.Som.rot_mat_870 (20,168,584 samples, 0.01%; -0.00%)</title><rect x="10.5" y="133" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="13.50" y="143.5" ></text>
+</g>
+<g >
+<title>memmove@plt (22,622,434 samples, 0.01%; +0.01%)</title><rect x="59.3" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="62.26" y="127.5" ></text>
+</g>
+<g >
+<title>[unknown] (42,063,853 samples, 0.02%; 0.00%)</title><rect x="66.5" y="69" width="0.2" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="69.50" y="79.5" ></text>
+</g>
+<g >
+<title>pow@@GLIBC_2.29 (413,210,277 samples, 0.18%; +0.01%)</title><rect x="16.5" y="101" width="2.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="19.51" y="111.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (29,620,204 samples, 0.01%; -0.01%)</title><rect x="24.8" y="101" width="0.1" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="27.79" y="111.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (35,840,063 samples, 0.02%; +0.01%)</title><rect x="59.9" y="101" width="0.1" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="62.86" y="111.5" ></text>
+</g>
+<g >
+<title>__memcmp_avx2_movbe (58,376,532 samples, 0.03%; +0.00%)</title><rect x="60.7" y="133" width="0.3" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="63.69" y="143.5" ></text>
+</g>
+<g >
+<title>caml_string_equal (19,511,705 samples, 0.01%; -0.01%)</title><rect x="37.3" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="40.26" y="127.5" ></text>
+</g>
+<g >
+<title>caml_blit_bytes (26,252,554 samples, 0.01%; -0.01%)</title><rect x="84.6" y="133" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="87.60" y="143.5" ></text>
+</g>
+<g >
+<title>__printf_buffer_write (19,230,983 samples, 0.01%; +0.00%)</title><rect x="66.1" y="85" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="69.15" y="95.5" ></text>
+</g>
+<g >
+<title>re_search_forward (29,526,687 samples, 0.01%; -0.02%)</title><rect x="1184.8" y="133" width="0.1" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="1187.76" y="143.5" ></text>
+</g>
+<g >
+<title>caml_string_notequal (29,296,808 samples, 0.01%; -0.00%)</title><rect x="37.4" y="117" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="40.40" y="127.5" ></text>
+</g>
+<g >
+<title>parse_format (91,306,537 samples, 0.04%; -0.00%)</title><rect x="59.6" y="117" width="0.5" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="62.62" y="127.5" ></text>
+</g>
+<g >
+<title>caml_raise_exn (19,421,661 samples, 0.01%; +0.01%)</title><rect x="118.7" y="133" width="0.1" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="121.69" y="143.5" ></text>
+</g>
+<g >
+<title>round_and_return (64,154,449 samples, 0.03%; +0.01%)</title><rect x="99.8" y="101" width="0.3" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="102.76" y="111.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (19,825,073 samples, 0.01%; +0.00%)</title><rect x="84.6" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="87.63" y="127.5" ></text>
+</g>
+<g >
+<title>mark_stack_push_block (638,288,159 samples, 0.28%; +0.02%)</title><rect x="948.9" y="133" width="3.4" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="951.94" y="143.5" ></text>
+</g>
+<g >
+<title>caml_modify (963,401,531 samples, 0.43%; -0.05%)</title><rect x="108.1" y="133" width="5.1" height="15.0" fill="rgb(204,204,255)" rx="2" ry="2" />
+<text  x="111.11" y="143.5" ></text>
+</g>
+<g >
+<title>all (225,458,569,080 samples, 100%)</title><rect x="10.0" y="165" width="1180.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" ></text>
+</g>
+<g >
+<title>__ieee754_log_fma (28,661,133 samples, 0.01%; +0.01%)</title><rect x="1185.9" y="117" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="1188.92" y="127.5" ></text>
+</g>
+<g >
+<title>[libgsl.so.28.0.0] (19,558,760 samples, 0.01%; +0.01%)</title><rect x="953.0" y="117" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="956.01" y="127.5" ></text>
+</g>
+<g >
+<title>__printf_buffer_write (39,906,424 samples, 0.02%; -0.01%)</title><rect x="61.5" y="133" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="64.46" y="143.5" ></text>
+</g>
+<g >
+<title>Stdlib.Parsing.loop_528 (35,782,575 samples, 0.02%; +0.01%)</title><rect x="19.4" y="117" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="22.43" y="127.5" ></text>
+</g>
+<g >
+<title>__mpn_mul_1 (25,869,042 samples, 0.01%; +0.00%)</title><rect x="66.6" y="53" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="69.55" y="63.5" ></text>
+</g>
+<g >
+<title>gsl_vector_max@plt (25,907,983 samples, 0.01%; +0.01%)</title><rect x="948.4" y="133" width="0.2" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="951.44" y="143.5" ></text>
+</g>
+<g >
+<title>caml_darken (1,737,404,276 samples, 0.77%; -0.10%)</title><rect x="87.1" y="133" width="9.1" height="15.0" fill="rgb(197,197,255)" rx="2" ry="2" />
+<text  x="90.12" y="143.5" ></text>
+</g>
+<g >
+<title>[libc.so.6] (568,148,469 samples, 0.25%; 0.00%)</title><rect x="11.3" y="133" width="3.0" height="15.0" fill="rgb(255,255,255)" rx="2" ry="2" />
+<text  x="14.35" y="143.5" ></text>
+</g>
+<g >
+<title>__mpn_extract_double (22,710,754 samples, 0.01%; +0.01%)</title><rect x="72.9" y="53" width="0.1" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="75.92" y="63.5" ></text>
+</g>
+<g >
+<title>caml_c_call (176,322,903 samples, 0.08%; +0.02%)</title><rect x="24.9" y="117" width="1.0" height="15.0" fill="rgb(255,207,207)" rx="2" ry="2" />
+<text  x="27.95" y="127.5" ></text>
+</g>
+<g >
+<title>__GI_____strtod_l_internal (235,666,020 samples, 0.10%; -0.00%)</title><rect x="27.3" y="101" width="1.3" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="30.35" y="111.5" ></text>
+</g>
+<g >
+<title>caml_memprof_sample_block (111,606,498 samples, 0.05%; -0.02%)</title><rect x="104.7" y="133" width="0.5" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="107.65" y="143.5" ></text>
+</g>
+<g >
+<title>__printf_buffer_write (35,935,978 samples, 0.02%; -0.01%)</title><rect x="74.0" y="53" width="0.2" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="77.04" y="63.5" ></text>
+</g>
+<g >
+<title>__memmove_avx_unaligned_erms (22,822,297 samples, 0.01%; -0.00%)</title><rect x="99.3" y="101" width="0.2" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="102.34" y="111.5" ></text>
+</g>
+<g >
+<title>caml_ba_get_N (77,619,826 samples, 0.03%; +0.00%)</title><rect x="79.8" y="133" width="0.4" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="82.84" y="143.5" ></text>
+</g>
+<g >
+<title>ml_gsl_vector_scale (25,061,379 samples, 0.01%; +0.00%)</title><rect x="956.1" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="959.12" y="143.5" ></text>
+</g>
+<g >
+<title>caml_float_of_string (283,821,106 samples, 0.13%; -0.01%)</title><rect x="27.1" y="117" width="1.5" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="30.11" y="127.5" ></text>
+</g>
+<g >
+<title>caml_alloc_initialized_string (29,322,742 samples, 0.01%; +0.00%)</title><rect x="63.8" y="133" width="0.2" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="66.83" y="143.5" ></text>
+</g>
+<g >
+<title>__strchrnul_avx2 (67,984,106 samples, 0.03%; +0.01%)</title><rect x="75.4" y="85" width="0.3" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="78.37" y="95.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_trylock@@GLIBC_2.34 (272,270,363 samples, 0.12%; -0.02%)</title><rect x="106.3" y="117" width="1.4" height="15.0" fill="rgb(207,207,255)" rx="2" ry="2" />
+<text  x="109.27" y="127.5" ></text>
+</g>
+<g >
+<title>validated_config (28,606,133 samples, 0.01%; -0.01%)</title><rect x="1189.9" y="133" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="1192.85" y="143.5" ></text>
+</g>
+<g >
+<title>__printf_buffer_write (64,849,010 samples, 0.03%; +0.02%)</title><rect x="22.5" y="69" width="0.4" height="15.0" fill="rgb(255,208,208)" rx="2" ry="2" />
+<text  x="25.51" y="79.5" ></text>
+</g>
+<g >
+<title>try_update_object_header (368,623,970 samples, 0.16%; +0.04%)</title><rect x="1187.9" y="133" width="1.9" height="15.0" fill="rgb(255,205,205)" rx="2" ry="2" />
+<text  x="1190.87" y="143.5" ></text>
+</g>
+<g >
+<title>__mpn_mul_1 (19,496,277 samples, 0.01%; -0.01%)</title><rect x="73.2" y="37" width="0.1" height="15.0" fill="rgb(209,209,255)" rx="2" ry="2" />
+<text  x="76.21" y="47.5" ></text>
+</g>
+<g >
+<title>caml_ba_offset (157,462,362 samples, 0.07%; -0.01%)</title><rect x="80.2" y="133" width="0.9" height="15.0" fill="rgb(208,208,255)" rx="2" ry="2" />
+<text  x="83.25" y="143.5" ></text>
+</g>
+<g >
+<title>caml_sweep (132,860,628 samples, 0.06%; +0.00%)</title><rect x="142.2" y="133" width="0.7" height="15.0" fill="rgb(255,209,209)" rx="2" ry="2" />
+<text  x="145.15" y="143.5" ></text>
+</g>
+</g>
+</svg>

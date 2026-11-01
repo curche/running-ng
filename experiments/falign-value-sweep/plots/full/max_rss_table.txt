@@ -1,0 +1,10 @@
+Max RSS (MB), per benchmark, vs. ocaml-5.5
+==========================================
+
+benchmark                            ocaml-5.5    ocaml-5.5-falign16    ocaml-5.5-falign32      ocaml-5.5-falign
+frama_c_eva_sqlite               640.4MB (ref)       640.3MB (-0.0%)       639.8MB (-0.1%)       639.8MB (-0.1%)
+menhir_ocamly                   2696.8MB (ref)      2687.9MB (-0.3%)      2687.3MB (-0.4%)      2690.9MB (-0.2%)
+menhir_sql_parser                319.8MB (ref)       320.1MB (+0.1%)       319.9MB (+0.0%)       319.8MB (-0.0%)
+owl_gc                           126.9MB (ref)       127.1MB (+0.2%)       125.8MB (-0.8%)       127.4MB (+0.4%)
+pplacer_testsuite                 69.8MB (ref)        70.1MB (+0.4%)        70.7MB (+1.3%)        70.1MB (+0.5%)
+zarith_pi                        129.1MB (ref)       128.8MB (-0.2%)       128.4MB (-0.5%)       129.0MB (-0.1%)

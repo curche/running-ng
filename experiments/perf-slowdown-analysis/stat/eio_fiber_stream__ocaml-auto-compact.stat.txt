@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:50:26 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/eio/eio_fiber_stream-ocaml-auto-compact':
+
+          2,770.06 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    11,053,188,714      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    41,884,343,969      cpu_core/instructions/                                                
+             1,199      page-faults                                                           
+             1,199      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+       125,779,151      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+           432,518      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+            50,554      cpu_core/dTLB-load-misses/                                            
+                30      context-switches                                                      
+
+       2.768246796 seconds time elapsed
+
+       2.767763000 seconds user
+       0.002999000 seconds sys
+
+

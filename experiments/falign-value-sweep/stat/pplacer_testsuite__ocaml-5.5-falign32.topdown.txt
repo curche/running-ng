@@ -1,0 +1,16 @@
+# started on Fri Sep 11 15:29:06 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/pplacer/pplacer_testsuite-ocaml-5.5-falign32 5' (10 runs):
+
+   248,007,588,541      cpu_core/TOPDOWN.SLOTS/          #     26.5 %  tma_frontend_bound       ( +-  0.01% )
+   116,379,036,645      cpu_core/topdown-retiring/                                              ( +-  0.43% )
+    46,505,652,162      cpu_core/topdown-bad-spec/                                              ( +-  0.87% )
+       837,183,730      cpu_core/INT_MISC.UOP_DROPPING/                                         ( +-  0.04% )
+    67,154,061,716      cpu_core/topdown-fe-bound/                                              ( +-  0.52% )
+    20,171,148,302      cpu_core/topdown-be-bound/                                              ( +-  1.03% )
+     <not counted>      cpu_atom/CPU_CLK_UNHALTED.CORE/  #      nan %  tma_frontend_bound       (0.00%)
+     <not counted>      cpu_atom/TOPDOWN_FE_BOUND.ALL/                                          (0.00%)
+
+      10.372611512 +- 0.001277353 seconds time elapsed  ( +-  0.01% )
+

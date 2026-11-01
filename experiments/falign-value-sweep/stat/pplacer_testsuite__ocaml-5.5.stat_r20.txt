@@ -1,0 +1,27 @@
+# started on Fri Sep 11 15:15:32 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/pplacer/pplacer_testsuite-ocaml-5.5 5' (20 runs):
+
+         10,087.79 msec task-clock                                                              ( +-  0.03% )
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    39,999,647,642      cpu_core/cycles/                                                        ( +-  0.02% )  (20.00%)
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+   133,632,707,792      cpu_core/instructions/                                                  ( +-  0.02% )  (30.01%)
+     <not counted>      cpu_atom/branches/                                                      (0.00%)
+    28,399,326,175      cpu_core/branches/                                                      ( +-  0.02% )  (40.01%)
+     <not counted>      cpu_atom/branch-misses/                                                 (0.00%)
+       437,015,195      cpu_core/branch-misses/                                                 ( +-  0.03% )  (50.01%)
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+     1,572,017,432      cpu_core/cache-references/                                              ( +-  0.04% )  (60.01%)
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+        23,632,195      cpu_core/cache-misses/                                                  ( +-  3.39% )  (70.01%)
+     <not counted>      cpu_atom/iTLB-load-misses/                                              (0.00%)
+           460,471      cpu_core/iTLB-load-misses/                                              ( +-  0.63% )  (80.01%)
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+        11,667,390      cpu_core/dTLB-load-misses/                                              ( +-  0.98% )  (90.01%)
+           163,209      cpu_core/frontend_retired.itlb_miss/                                        ( +-  1.64% )  (90.01%)
+        28,051,672      cpu_core/frontend_retired.l1i_miss/                                        ( +-  1.01% )  (10.00%)
+
+      10.092962984 +- 0.002496262 seconds time elapsed  ( +-  0.02% )
+

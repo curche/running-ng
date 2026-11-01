@@ -1,0 +1,49 @@
+owl_gc: space_overhead (o=) sweep -- wall_time / RSS / gc_overhead / compactions
+====================================================================================================
+
+ocaml-5.5:
+o=        wall_time(s)   max_rss(MB)   gc_overhead   compactions
+o=20             4.940         140.6         36.3%             0
+o=40             4.890         136.3         34.5%             0
+o=80             4.730         131.0         32.8%             0
+o=120            4.630         126.8         31.4%             0
+o=160            4.560         123.7         30.4%             0
+o=240            4.480         120.1         29.2%             0
+o=320            4.430         118.8         28.4%             0
+
+ocaml-auto-compact:
+o=        wall_time(s)   max_rss(MB)   gc_overhead   compactions
+o=20             6.470         145.8         51.3%         33792
+o=40             6.270         140.7         49.5%         31595
+o=80             6.000         133.8         47.4%         28669
+o=120            5.820         129.4         45.6%         26806
+o=160            5.700         126.6         44.4%         25517
+o=240            5.590         123.1         42.7%         23848
+o=320            5.470         120.9         41.8%         22816
+
+socaml:
+o=        wall_time(s)   max_rss(MB)   gc_overhead   compactions
+o=20            11.080         280.0         71.5%             0
+o=40            11.090         279.9         71.5%             0
+o=80            11.070         279.9         71.6%             0
+o=120           11.080         279.9         71.4%             0
+o=160           11.080         280.0         71.5%             0
+o=240           11.070         279.9         71.6%             0
+o=320           11.080         280.0         71.4%             0
+
+socaml-auto-compact:
+o=        wall_time(s)   max_rss(MB)   gc_overhead   compactions
+o=20            10.470         280.6         69.9%             0
+o=40            10.480         280.5         70.0%             0
+o=80            10.450         280.7         70.0%             0
+o=120           10.500         280.6         70.0%             0
+o=160           10.480         280.7         69.9%             0
+o=240           10.470         280.5         69.9%             0
+o=320           10.500         280.6         69.8%             0
+
+Cross-o= summary per runtime (average / median / range):
+runtime                     wall avg    wall med  wall range     rss avg     rss med   rss range
+ocaml-5.5                     4.666s      4.630s      0.510s      128.2M      126.8M       21.8M
+ocaml-auto-compact            5.903s      5.820s      1.000s      131.5M      129.4M       24.9M
+socaml                       11.079s     11.080s      0.020s      280.0M      279.9M        0.1M
+socaml-auto-compact          10.479s     10.480s      0.050s      280.6M      280.6M        0.2M

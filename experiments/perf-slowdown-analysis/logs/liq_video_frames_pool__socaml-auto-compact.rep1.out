@@ -1,0 +1,3 @@
+/home/curche/git/macro-benches/benchmarks/liq-video-frames/liq_video_frames_pool-socaml-auto-compact: line 5: /home/curche/git/macro-benches/_build-socaml-auto-compact/default/benchmarks/liq-video-frames/liq_video_frames.exe: No such file or directory
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.041 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/liq_video_frames_pool__socaml-auto-compact.rep1.data (4 samples) ]

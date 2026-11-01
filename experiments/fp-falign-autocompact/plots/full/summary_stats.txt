@@ -1,0 +1,47 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-5.5-fp                  1.025x    1.009x    0.873x    1.333x    0.461x   (n=29/29)
+ocaml-5.5-falign              0.994x    1.000x    0.569x    1.333x    0.764x   (n=29/29)
+ocaml-5.5-fp-falign           1.023x    1.011x    0.874x    1.333x    0.459x   (n=29/29)
+ocaml-auto-compact            0.996x    1.000x    0.854x    1.257x    0.403x   (n=29/29)
+ocaml-auto-compact-fp         1.029x    1.012x    0.926x    1.257x    0.331x   (n=29/29)
+ocaml-auto-compact-falign     0.990x    1.000x    0.564x    1.251x    0.687x   (n=29/29)
+ocaml-auto-compact-fp-falign    1.027x    1.007x    0.836x    1.255x    0.419x   (n=29/29)
+
+max RSS ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=29/29)
+ocaml-5.5-fp                  1.003x    1.000x    0.980x    1.059x    0.079x   (n=29/29)
+ocaml-5.5-falign              0.991x    1.000x    0.730x    1.026x    0.296x   (n=29/29)
+ocaml-5.5-fp-falign           1.005x    1.000x    0.982x    1.061x    0.079x   (n=29/29)
+ocaml-auto-compact            1.002x    1.000x    0.993x    1.023x    0.030x   (n=29/29)
+ocaml-auto-compact-fp         1.006x    1.000x    0.984x    1.063x    0.079x   (n=29/29)
+ocaml-auto-compact-falign     0.992x    1.000x    0.730x    1.026x    0.296x   (n=29/29)
+ocaml-auto-compact-fp-falign    1.006x    1.001x    0.990x    1.053x    0.064x   (n=29/29)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                      28.8%     21.9%      0.0%     94.8%     94.8%   (n=29/29)
+ocaml-5.5-fp                   28.5%     21.6%      0.0%     94.8%     94.8%   (n=29/29)
+ocaml-5.5-falign               29.1%     22.1%      0.0%     94.8%     94.8%   (n=29/29)
+ocaml-5.5-fp-falign            28.8%     21.8%      0.0%     95.0%     95.0%   (n=29/29)
+ocaml-auto-compact             29.3%     22.0%      0.0%     94.9%     94.9%   (n=29/29)
+ocaml-auto-compact-fp          29.0%     21.6%      0.0%     94.7%     94.7%   (n=29/29)
+ocaml-auto-compact-falign      29.6%     22.1%      0.0%     95.3%     95.3%   (n=29/29)
+ocaml-auto-compact-fp-falign     29.3%     21.8%      0.0%     95.0%     95.0%   (n=29/29)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                          0         0         0         0         0   (n=29/29)
+ocaml-5.5-fp                       0         0         0         0         0   (n=29/29)
+ocaml-5.5-falign                   0         0         0         0         0   (n=29/29)
+ocaml-5.5-fp-falign                0         0         0         0         0   (n=29/29)
+ocaml-auto-compact               924         0         0     26806     26806   (n=29/29)
+ocaml-auto-compact-fp            924         0         0     26806     26806   (n=29/29)
+ocaml-auto-compact-falign        924         0         0     26806     26806   (n=29/29)
+ocaml-auto-compact-fp-falign       924         0         0     26806     26806   (n=29/29)
+

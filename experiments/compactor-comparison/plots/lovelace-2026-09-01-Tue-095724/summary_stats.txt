@@ -1,0 +1,31 @@
+Compactor comparison -- cross-benchmark summary statistics
+======================================================================
+
+wall_time ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=24/24)
+ocaml-auto-compact            0.991x    0.998x    0.825x    1.192x    0.367x   (n=24/24)
+socaml                        0.982x    0.997x    0.783x    1.120x    0.336x   (n=15/24)
+socaml-auto-compact           0.985x    0.993x    0.826x    1.223x    0.397x   (n=15/24)
+
+max RSS ratio vs. ocaml-5.5 (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                     1.000x    1.000x    1.000x    1.000x    0.000x   (n=24/24)
+ocaml-auto-compact            1.001x    1.000x    0.976x    1.026x    0.050x   (n=24/24)
+socaml                        1.026x    1.002x    0.876x    1.173x    0.297x   (n=15/24)
+socaml-auto-compact           1.028x    1.013x    0.876x    1.176x    0.299x   (n=15/24)
+
+gc_overhead %% (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                      28.9%     23.8%      2.7%     89.3%     86.6%   (n=24/24)
+ocaml-auto-compact             29.0%     23.7%      2.7%     89.3%     86.6%   (n=24/24)
+socaml                         31.9%     25.6%      2.7%     89.2%     86.5%   (n=15/24)
+socaml-auto-compact            31.5%     25.3%      2.7%     89.2%     86.6%   (n=15/24)
+
+compactions (raw) (average / median / range across benchmarks):
+runtime                          avg    median       min       max     range
+ocaml-5.5                          0         0         0         0         0   (n=24/24)
+ocaml-auto-compact                 0         0         0         0         0   (n=24/24)
+socaml                             0         0         0         0         0   (n=15/24)
+socaml-auto-compact                0         0         0         0         0   (n=15/24)
+

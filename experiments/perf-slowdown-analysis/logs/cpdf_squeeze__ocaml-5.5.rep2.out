@@ -1,0 +1,8 @@
+Initial file size is 9142108 bytes
+Beginning squeeze: 107854 objects
+Squeezing... Down to 102309 objects
+Squeezing page data and xobjects
+Recompressing document
+Final file size is 0 bytes, 0.00% of original.
+[ perf record: Woken up 206 times to write data ]
+[ perf record: Captured and wrote 51.294 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/cpdf_squeeze__ocaml-5.5.rep2.data (5296 samples) ]

@@ -1,0 +1,27 @@
+# started on Wed Sep  9 14:55:27 2026
+
+
+ Performance counter stats for '/home/curche/git/macro-benches/benchmarks/zarith/zarith_pi-ocaml-5.5 15000':
+
+          3,939.95 msec task-clock                                                            
+     <not counted>      cpu_atom/cycles/                                                        (0.00%)
+    15,722,267,610      cpu_core/cycles/                                                      
+     <not counted>      cpu_atom/instructions/                                                  (0.00%)
+    40,610,318,015      cpu_core/instructions/                                                
+         1,451,236      page-faults                                                           
+         1,451,236      minor-faults                                                          
+                 0      major-faults                                                          
+     <not counted>      cpu_atom/cache-references/                                              (0.00%)
+        66,921,431      cpu_core/cache-references/                                            
+     <not counted>      cpu_atom/cache-misses/                                                  (0.00%)
+           609,558      cpu_core/cache-misses/                                                
+     <not counted>      cpu_atom/dTLB-load-misses/                                              (0.00%)
+         1,877,390      cpu_core/dTLB-load-misses/                                            
+                46      context-switches                                                      
+
+       3.941148850 seconds time elapsed
+
+       2.740675000 seconds user
+       1.199857000 seconds sys
+
+

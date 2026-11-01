@@ -1,0 +1,2 @@
+[ perf record: Woken up 143 times to write data ]
+[ perf record: Captured and wrote 35.636 MB /home/curche/git/running-ng/experiments/perf-slowdown-analysis/perf-data/test_decompress__socaml-auto-compact.rep1.data (2527 samples) ]

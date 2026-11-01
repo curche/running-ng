@@ -1,0 +1,91 @@
+# =============================================================================
+# Macro-benchmarks — 4-way compactor comparison, forced code alignment
+# =============================================================================
+# Follow-up to macrobenchmarks_compactor_4way.yml. The plain 4-way run on
+# this machine (lovelace) did NOT reproduce the pplacer_testsuite regression
+# seen on the original machine (turing) — all three patched variants landed
+# within ±3.4% of stock, vs. a consistent +19-20% regression on turing.
+#
+# The original investigation's own conclusion was that the turing regression
+# was a code-layout/cache-alignment artifact: the patches add unrelated code
+# earlier in major_gc.c, incidentally shifting hot functions
+# (do_some_marking / mark / pool_sweep) to a different cache-line offset in
+# the linked binary — not an algorithmic cost (compactions=0 throughout).
+# Forcing identical alignment via `-falign-functions=64` on *stock* OCaml
+# alone reproduced ~80% of the "regression" on turing.
+#
+# This config repeats that experiment here: same 5 runtimes (stock +
+# falign-forced stock + falign-forced patches), same CFLAGS injection via
+# configure_args. If alignment is the real explanation, ALL falign variants
+# (including falign-forced stock) should land in the same band relative to
+# plain ocaml-5.5, regardless of which patch (if any) is applied — which
+# would also explain why the un-forced regression didn't show up here: a
+# different gcc (15.2.0 vs turing's 13.3.0) landed the hot functions at a
+# different, non-regressing offset by chance.
+# =============================================================================
+
+includes:
+  - "../base/ocaml/macro_base.yml"
+
+overrides:
+  invocations: 3
+  suites.macro-coq-monorepo.timeout: 300
+
+# =============================================================================
+# Runtimes
+# =============================================================================
+runtimes:
+  ocaml-5.5:
+    type: OCaml
+    version: "5.5.0"
+
+  ocaml-5.5-falign:
+    type: OCaml
+    version: "5.5.0"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  ocaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "auto-compact-5.5"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  socaml-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "socaml-chunk-only"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+  socaml-auto-compact-falign:
+    type: OCaml
+    repo: "https://github.com/curche/ocaml.git"
+    commit: "new_compactor"
+    configure_args:
+      - "CFLAGS=-falign-functions=64"
+
+configs:
+  - "ocaml-5.5|perf_grp1|re-25|md-2"
+  - "ocaml-5.5-falign|perf_grp1|re-25|md-2"
+  - "ocaml-auto-compact-falign|perf_grp1|re-25|md-2"
+  - "socaml-falign|perf_grp1|re-25|md-2"
+  - "socaml-auto-compact-falign|perf_grp1|re-25|md-2"
+
+comparisons:
+  - label: "effect of falign=64 alone on stock"
+    a: ocaml-5.5
+    b: ocaml-5.5-falign
+  - label: "auto-compaction alone (5.5 baseline), falign=64"
+    a: ocaml-5.5-falign
+    b: ocaml-auto-compact-falign
+  - label: "new compactor alone (no auto-compaction), falign=64"
+    a: ocaml-5.5-falign
+    b: socaml-falign
+  - label: "adding auto-compaction to new compactor, falign=64"
+    a: socaml-falign
+    b: socaml-auto-compact-falign
+  - label: "combined effect of both changes, falign=64"
+    a: ocaml-5.5-falign
+    b: socaml-auto-compact-falign
